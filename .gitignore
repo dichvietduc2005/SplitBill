@@ -1,0 +1,38 @@
+# Common ignores for both Android & Ktor backend
+
+# Android specific
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+AndroidCLI/
+
+# Ktor Backend specific
+.idea/
+out/
+build/
+.DS_Store
+*.ipr
+*.iws
+
+# Gradle files (except wrapper)
+.gradle/
+build/
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
