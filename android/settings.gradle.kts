@@ -25,9 +25,7 @@ dependencyResolutionManagement {
     }
 }
 
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
-}
+// Foojay resolver removed to fix API download issue
 
 rootProject.name = "Split Bill"
 include(":app")
