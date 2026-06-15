@@ -82,7 +82,7 @@ fun DebtSummaryScreen(
         ) {
           // Header summary card — animated entrance
           item {
-            var visible by remember { mutableStateOf(false) }
+            var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) { visible = true }
             AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
               SplitBillCard(modifier = Modifier.fillMaxWidth()) {
@@ -130,7 +130,7 @@ fun DebtSummaryScreen(
           // Gợi ý thiết lập VietQR
           if (data.debts.isNotEmpty()) {
             item {
-              var visible by remember { mutableStateOf(false) }
+              var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
               LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(Motion.StaggerDelay)
                 visible = true
@@ -178,7 +178,7 @@ fun DebtSummaryScreen(
             }
           } else {
             item {
-              var visible by remember { mutableStateOf(false) }
+              var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
               LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(2 * Motion.StaggerDelay)
                 visible = true
@@ -193,7 +193,7 @@ fun DebtSummaryScreen(
             }
             itemsIndexed(data.debts, key = { _, d -> "${d.fromUserId}_${d.toUserId}" }) { index, debt ->
               // Staggered slide-in from right
-              var visible by remember { mutableStateOf(false) }
+              var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
               LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay((index + 3) * Motion.StaggerDelay)
                 visible = true
