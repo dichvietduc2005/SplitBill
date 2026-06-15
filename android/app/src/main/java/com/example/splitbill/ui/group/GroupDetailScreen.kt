@@ -59,7 +59,7 @@ fun GroupDetailScreen(
   }
 
   // FAB entrance animation
-  var fabVisible by remember { mutableStateOf(false) }
+  var fabVisible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
   LaunchedEffect(Unit) {
     kotlinx.coroutines.delay(400)
     fabVisible = true
@@ -154,7 +154,7 @@ fun GroupDetailScreen(
         } else {
           itemsIndexed(state.bills, key = { _, bill -> bill.id }) { index, bill ->
             // Staggered entrance animation per bill card
-            var visible by remember { mutableStateOf(false) }
+            var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
               kotlinx.coroutines.delay(index * Motion.StaggerDelay)
               visible = true
@@ -209,7 +209,7 @@ fun GroupDetailScreen(
           verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
         ) {
           itemsIndexed(state.members) { index, member ->
-            var visible by remember { mutableStateOf(false) }
+            var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
               kotlinx.coroutines.delay(index * Motion.StaggerDelay)
               visible = true

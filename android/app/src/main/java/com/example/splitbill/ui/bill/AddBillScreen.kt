@@ -1,4 +1,4 @@
-package com.example.splitbill.ui.bill
+﻿package com.example.splitbill.ui.bill
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,8 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitbill.data.api.BillSplitItem
@@ -25,7 +28,9 @@ import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.Motion
 import com.example.splitbill.ui.localization.localized
 import com.example.splitbill.ui.components.SplitBillTopBar
+import com.example.splitbill.ui.components.SplitBillCard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,12 +43,12 @@ fun AddBillScreen(
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-  var description by remember { mutableStateOf("") }
-  var totalAmountText by remember { mutableStateOf("") }
-  var selectedPayerId by remember { mutableStateOf(members.firstOrNull()?.userId ?: "") }
+  var description by rememberSaveable { mutableStateOf("") }
+  var totalAmountText by rememberSaveable { mutableStateOf("") }
+  var selectedPayerId by rememberSaveable { mutableStateOf(members.firstOrNull()?.userId ?: "") }
   // Map: userId -> amount text they owe
   val splitAmounts = remember { mutableStateMapOf<String, String>() }
-  var splitMode by remember { mutableStateOf(SplitMode.EQUAL) }
+  var splitMode by rememberSaveable { mutableStateOf(SplitMode.EQUAL) }
   var payerDropdownExpanded by remember { mutableStateOf(false) }
   var showSuccessOverlay by remember { mutableStateOf(false) }
 
@@ -124,78 +129,108 @@ fun AddBillScreen(
           }
         }
 
-        // --- Description ---
+        // --- Total Amount (Premium Header) ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            Column {
-              Text("Thông tin hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-              Spacer(Modifier.height(Dimens.SpacingS))
-              OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Mô tả (VD: Ăn tối, Xăng xe...)") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Receipt, contentDescription = null) },
-                singleLine = true
-              )
+            Card(
+              shape = RoundedCornerShape(24.dp),
+              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+              modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingS)
+            ) {
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpacingL, horizontal = Dimens.SpacingM)
+              ) {
+                Text(
+                  "Tổng số tiền",
+                  style = MaterialTheme.typography.labelLarge,
+                  color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+                Spacer(Modifier.height(Dimens.SpacingXS))
+                OutlinedTextField(
+                  value = totalAmountText,
+                  onValueChange = { totalAmountText = it },
+                  textStyle = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                  ),
+                  colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent
+                  ),
+                  placeholder = {
+                    Text(
+                      "0",
+                      style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                      modifier = Modifier.fillMaxWidth(),
+                      color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f)
+                    )
+                  },
+                  modifier = Modifier.fillMaxWidth(),
+                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                  singleLine = true,
+                  suffix = { Text("đ", style = MaterialTheme.typography.headlineMedium) }
+                )
+              }
             }
           }
         }
 
-        // --- Total Amount ---
+        // --- Description ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
             OutlinedTextField(
-              value = totalAmountText,
-              onValueChange = { totalAmountText = it },
-              label = { Text("Tổng tiền (VNĐ)") },
+              value = description,
+              onValueChange = { description = it },
+              label = { Text("Mô tả hóa đơn (Ăn tối, Taxi...)") },
               modifier = Modifier.fillMaxWidth(),
-              leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null) },
-              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-              singleLine = true,
-              suffix = { Text("đ") }
+              leadingIcon = { Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+              shape = RoundedCornerShape(16.dp),
+              singleLine = true
             )
           }
         }
 
         // --- Payer Dropdown ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(2 * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            Column {
-              Text("Ai đã trả tiền?", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-              Spacer(Modifier.height(Dimens.SpacingS))
-              ExposedDropdownMenuBox(
+            ExposedDropdownMenuBox(
+              expanded = payerDropdownExpanded,
+              onExpandedChange = { payerDropdownExpanded = !payerDropdownExpanded }
+            ) {
+              OutlinedTextField(
+                value = members.find { it.userId == selectedPayerId }?.username ?: "Chọn người trả",
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                label = { Text("Ai đã trả tiền?") },
+                shape = RoundedCornerShape(16.dp),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(payerDropdownExpanded) },
+                leadingIcon = { Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+              )
+              ExposedDropdownMenu(
                 expanded = payerDropdownExpanded,
-                onExpandedChange = { payerDropdownExpanded = !payerDropdownExpanded }
+                onDismissRequest = { payerDropdownExpanded = false }
               ) {
-                OutlinedTextField(
-                  value = members.find { it.userId == selectedPayerId }?.username ?: "Chọn người trả",
-                  onValueChange = {},
-                  readOnly = true,
-                  modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                  label = { Text("Người trả tiền") },
-                  trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(payerDropdownExpanded) },
-                  leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                )
-                ExposedDropdownMenu(
-                  expanded = payerDropdownExpanded,
-                  onDismissRequest = { payerDropdownExpanded = false }
-                ) {
-                  members.forEach { member ->
-                    DropdownMenuItem(
-                      text = { Text(member.username) },
-                      onClick = {
-                        selectedPayerId = member.userId
-                        payerDropdownExpanded = false
-                      }
-                    )
-                  }
+                members.forEach { member ->
+                  DropdownMenuItem(
+                    text = { Text(member.username, fontWeight = FontWeight.SemiBold) },
+                    onClick = {
+                      selectedPayerId = member.userId
+                      payerDropdownExpanded = false
+                    },
+                    leadingIcon = {
+                      Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                    }
+                  )
                 }
               }
             }
@@ -204,24 +239,25 @@ fun AddBillScreen(
 
         // --- Split Mode Toggle ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(3 * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
             Column {
-              Text("Cách chia tiền", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+              Spacer(Modifier.height(Dimens.SpacingS))
+              Text("Phương thức chia", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
               Spacer(Modifier.height(Dimens.SpacingS))
               SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
                   selected = splitMode == SplitMode.EQUAL,
                   onClick = { splitMode = SplitMode.EQUAL },
                   shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                  label = { Text("Chia đều") }
+                  label = { Text("Chia đều", fontWeight = FontWeight.Bold) }
                 )
                 SegmentedButton(
                   selected = splitMode == SplitMode.CUSTOM,
                   onClick = { splitMode = SplitMode.CUSTOM },
                   shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                  label = { Text("Tùy chỉnh") }
+                  label = { Text("Tùy chỉnh", fontWeight = FontWeight.Bold) }
                 )
               }
             }
@@ -230,63 +266,67 @@ fun AddBillScreen(
 
         // --- Split Inputs per member ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(4 * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = fadeIn()) {
-            Text(
-              "Chia cho từng người",
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
+            Spacer(Modifier.height(Dimens.SpacingXS))
           }
         }
         
         itemsIndexed(members) { index, member ->
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay((5 + index) * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(index)) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
+            SplitBillCard(
+              modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+              containerColor = if (splitAmounts[member.userId]?.isNotEmpty() == true) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ) {
-              Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(36.dp)
+              Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
               ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                  Text(
-                    member.username.first().uppercaseChar().toString(),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                  )
+                Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.primaryContainer,
+                  modifier = Modifier.size(40.dp)
+                ) {
+                  Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                      member.username.first().uppercaseChar().toString(),
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                  }
                 }
+                Text(
+                  member.username,
+                  style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                  modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                  value = splitAmounts[member.userId] ?: "",
+                  onValueChange = { splitAmounts[member.userId] = it },
+                  enabled = splitMode == SplitMode.CUSTOM,
+                  modifier = Modifier.width(120.dp),
+                  textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
+                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                  singleLine = true,
+                  shape = RoundedCornerShape(12.dp),
+                  suffix = { Text("đ") }
+                )
               }
-              Text(
-                member.username,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-              )
-              OutlinedTextField(
-                value = splitAmounts[member.userId] ?: "",
-                onValueChange = { splitAmounts[member.userId] = it },
-                enabled = splitMode == SplitMode.CUSTOM,
-                modifier = Modifier.width(110.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                suffix = { Text("đ") }
-              )
             }
           }
         }
 
         // --- Submit Button ---
         item {
-          var visible by remember { mutableStateOf(false) }
+          var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(7 * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = slideInVertically(animationSpec = Motion.tweenSlow(), initialOffsetY = { it / 2 }) + fadeIn()) {
             Column {
-              Spacer(Modifier.height(Dimens.SpacingS))
+              Spacer(Modifier.height(Dimens.SpacingM))
               Button(
                 onClick = {
                   val total = totalAmountText.toDoubleOrNull() ?: 0.0
@@ -296,18 +336,19 @@ fun AddBillScreen(
                   }
                   viewModel.createBill(groupId, description, total, selectedPayerId, splits)
                 },
-                modifier = Modifier.fillMaxWidth().height(Dimens.ButtonHeight),
-                enabled = uiState !is AddBillUiState.Loading
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = uiState !is AddBillUiState.Loading && totalAmountText.isNotBlank() && description.isNotBlank()
               ) {
                 if (uiState is AddBillUiState.Loading) {
-                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                  CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                  Icon(Icons.Default.Check, contentDescription = null)
+                  Icon(Icons.Default.CheckCircle, contentDescription = null)
                   Spacer(Modifier.width(Dimens.SpacingS))
                   Text("Lưu hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
               }
-              Spacer(Modifier.height(Dimens.SpacingM))
+              Spacer(Modifier.height(Dimens.SpacingXL))
             }
           }
         }
@@ -322,7 +363,7 @@ fun AddBillScreen(
       modifier = Modifier.fillMaxSize()
     ) {
       Box(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         contentAlignment = Alignment.Center
       ) {
         val scale = remember { Animatable(0f) }
@@ -338,14 +379,15 @@ fun AddBillScreen(
         Surface(
           shape = CircleShape,
           color = MaterialTheme.colorScheme.primaryContainer,
-          modifier = Modifier.size(120.dp).scale(scale.value)
+          modifier = Modifier.size(140.dp).scale(scale.value),
+          shadowElevation = 8.dp
         ) {
           Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(
               Icons.Default.CheckCircle,
               contentDescription = "Success",
               tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(64.dp)
+              modifier = Modifier.size(80.dp)
             )
           }
         }
