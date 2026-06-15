@@ -57,6 +57,18 @@ dependencies {
     implementation("org.postgresql:postgresql:42.7.3")
     implementation("com.zaxxer:HikariCP:5.1.0")
 
+    // Phase 1: StatusPages, RequestValidation, RateLimit
+    implementation("io.ktor:ktor-server-status-pages-jvm")
+    implementation("io.ktor:ktor-server-request-validation-jvm")
+    implementation("io.ktor:ktor-server-rate-limit-jvm")
+
+    // Phase 2: Dependency Injection (Koin)
+    implementation("io.insert-koin:koin-ktor:4.0.4")
+    implementation("io.insert-koin:koin-logger-slf4j:4.0.4")
+
+    // Phase 3: Swagger / OpenAPI Documentation
+    implementation("io.ktor:ktor-server-swagger-jvm")
+
     testImplementation("io.ktor:ktor-server-tests-jvm")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }

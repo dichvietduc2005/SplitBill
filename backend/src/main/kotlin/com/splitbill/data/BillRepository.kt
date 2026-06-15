@@ -20,7 +20,7 @@ data class BillSplit(
     val amountOwed: BigDecimal
 )
 
-object BillRepository {
+class BillRepository {
 
     // Tạo hóa đơn mới kèm danh sách chia nợ
     suspend fun createBill(
@@ -54,11 +54,18 @@ object BillRepository {
             .singleOrNull()
     }
 
-    // Lấy danh sách hóa đơn của một nhóm
-    suspend fun getBillsForGroup(groupId: String): List<Bill> = DatabaseFactory.dbQuery {
+    // Lấy danh sách hóa đơn của một nhóm — CÓ PHÂN TRANG
+    suspend fun getBillsForGroup(groupId: String, limit: Int = 50, offset: Int = 0): List<Bill> = DatabaseFactory.dbQuery {
         Bills.selectAll().where { Bills.groupId eq UUID.fromString(groupId) }
             .orderBy(Bills.createdAt, SortOrder.DESC)
+            .limit(limit, offset.toLong())
             .map { resultRowToBill(it) }
+    }
+
+    // Đếm tổng số hóa đơn trong nhóm (cho phân trang)
+    suspend fun countBillsForGroup(groupId: String): Long = DatabaseFactory.dbQuery {
+        Bills.selectAll().where { Bills.groupId eq UUID.fromString(groupId) }
+            .count()
     }
 
     // Lấy thông tin hóa đơn theo ID

@@ -17,7 +17,7 @@ data class GroupMember(
     val joinedAt: String
 )
 
-object GroupRepository {
+class GroupRepository {
 
     // Tạo nhóm mới và tự động thêm người tạo làm thành viên
     suspend fun createGroup(name: String, createdByUserId: String): Group? = DatabaseFactory.dbQuery {
