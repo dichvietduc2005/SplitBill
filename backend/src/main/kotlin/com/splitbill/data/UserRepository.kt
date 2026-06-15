@@ -18,7 +18,7 @@ data class User(
     val accountName: String? = null
 )
 
-object UserRepository {
+class UserRepository {
     private fun resultRowToUser(row: ResultRow) = User(
         id = row[Users.id].toString(),
         username = row[Users.username],

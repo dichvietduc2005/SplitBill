@@ -1,0 +1,633 @@
+openapi: "3.0.3"
+info:
+  title: "SplitBill API"
+  description: |
+    API backend cho ứng dụng chia tiền nhóm SplitBill.
+    Hỗ trợ quản lý nhóm, hóa đơn, tối giản nợ (Debt Simplification) và VietQR.
+  version: "1.0.0"
+  contact:
+    name: "SplitBill Team"
+
+servers:
+  - url: "http://localhost:8081"
+    description: "Local Development"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT Token lấy từ /api/auth/login hoặc /api/auth/register"
+
+  schemas:
+    # ==========================================
+    # AUTH
+    # ==========================================
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          example: "john@example.com"
+        password:
+          type: string
+          minLength: 6
+          example: "mypassword123"
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "john_doe"
+        password:
+          type: string
+          example: "mypassword123"
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: "JWT Token dùng cho xác thực"
+        username:
+          type: string
+        message:
+          type: string
+
+    # ==========================================
+    # GROUP
+    # ==========================================
+    CreateGroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: "Nhóm đi ăn Thứ 6"
+
+    AddMemberRequest:
+      type: object
+      required: [usernameOrEmail]
+      properties:
+        usernameOrEmail:
+          type: string
+          description: "Tìm thành viên bằng username hoặc email"
+          example: "jane_doe"
+
+    GroupResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        createdByName:
+          type: string
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+
+    MemberResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        joinedAt:
+          type: string
+
+    # ==========================================
+    # BILL
+    # ==========================================
+    BillSplitItem:
+      type: object
+      required: [userId, amount]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+          description: "Số tiền mà user này nợ"
+
+    CreateBillRequest:
+      type: object
+      required: [groupId, description, totalAmount, paidByUserId, splits]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 255
+          example: "Ăn lẩu Haidilao"
+        totalAmount:
+          type: number
+          format: double
+          example: 500000
+        paidByUserId:
+          type: string
+          format: uuid
+          description: "UUID của người đã trả tiền"
+        splits:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillSplitItem"
+
+    BillSplitResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        amountOwed:
+          type: number
+          format: double
+
+    BillResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        totalAmount:
+          type: number
+          format: double
+        paidByUserId:
+          type: string
+          format: uuid
+        paidByUsername:
+          type: string
+        splits:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillSplitResponse"
+        createdAt:
+          type: string
+
+    PaginatedBillResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillResponse"
+        total:
+          type: integer
+          format: int64
+          description: "Tổng số hóa đơn trong nhóm"
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    # ==========================================
+    # DEBT
+    # ==========================================
+    SimplifiedDebt:
+      type: object
+      properties:
+        fromUserId:
+          type: string
+          format: uuid
+        fromUsername:
+          type: string
+        toUserId:
+          type: string
+          format: uuid
+        toUsername:
+          type: string
+        amount:
+          type: number
+          format: double
+          description: "Số tiền fromUser cần trả cho toUser"
+
+    DebtResponse:
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        groupName:
+          type: string
+        debts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimplifiedDebt"
+        totalTransactions:
+          type: integer
+
+    # ==========================================
+    # PROFILE
+    # ==========================================
+    UpdateBankInfoRequest:
+      type: object
+      required: [bankCode, accountNumber, accountName]
+      properties:
+        bankCode:
+          type: string
+          description: "Mã ngân hàng VietQR (VCB, TCB, MB, ...)"
+          example: "MB"
+        accountNumber:
+          type: string
+          example: "0123456789"
+        accountName:
+          type: string
+          example: "NGUYEN VAN A"
+
+    ProfileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        bankCode:
+          type: string
+          nullable: true
+        accountNumber:
+          type: string
+          nullable: true
+        accountName:
+          type: string
+          nullable: true
+
+    # ==========================================
+    # COMMON
+    # ==========================================
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        code:
+          type: string
+          description: "Error code (VALIDATION_ERROR, NOT_FOUND, FORBIDDEN, ...)"
+
+# ==========================================
+# PATHS (ENDPOINTS)
+# ==========================================
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: "Đăng ký tài khoản mới"
+      description: "Rate Limit: 10 request/phút"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: "Đăng ký thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Username hoặc email đã tồn tại"
+        "429":
+          description: "Rate limited"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: "Đăng nhập"
+      description: "Rate Limit: 10 request/phút"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: "Đăng nhập thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: "Sai username hoặc mật khẩu"
+        "429":
+          description: "Rate limited"
+
+  /api/groups:
+    post:
+      tags: [Groups]
+      summary: "Tạo nhóm mới"
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: "Tạo nhóm thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+    get:
+      tags: [Groups]
+      summary: "Lấy danh sách nhóm của user đang đăng nhập"
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: "Danh sách nhóm"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupResponse"
+
+  /api/groups/{id}:
+    get:
+      tags: [Groups]
+      summary: "Lấy thông tin chi tiết nhóm"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: "Chi tiết nhóm"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "403":
+          description: "Không phải thành viên nhóm"
+
+  /api/groups/{id}/members:
+    post:
+      tags: [Groups]
+      summary: "Thêm thành viên vào nhóm"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "200":
+          description: "Thêm thành viên thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: "Không tìm thấy user"
+        "409":
+          description: "Đã là thành viên"
+    get:
+      tags: [Groups]
+      summary: "Lấy danh sách thành viên nhóm"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: "Danh sách thành viên"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberResponse"
+
+  /api/bills:
+    post:
+      tags: [Bills]
+      summary: "Tạo hóa đơn mới"
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBillRequest"
+      responses:
+        "201":
+          description: "Tạo hóa đơn thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillResponse"
+        "400":
+          description: "Validation error"
+        "403":
+          description: "Không phải thành viên nhóm"
+    get:
+      tags: [Bills]
+      summary: "Lấy danh sách hóa đơn của nhóm (có phân trang)"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+          description: "Số hóa đơn tối đa trả về (mặc định 50)"
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: "Vị trí bắt đầu (mặc định 0)"
+      responses:
+        "200":
+          description: "Danh sách hóa đơn có phân trang"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBillResponse"
+
+  /api/bills/{id}:
+    delete:
+      tags: [Bills]
+      summary: "Xóa hóa đơn"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: "Xóa thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: "Không tìm thấy hóa đơn"
+
+  /api/debts/{groupId}:
+    get:
+      tags: [Debts]
+      summary: "Tính toán và trả về danh sách nợ tối giản"
+      description: "Chạy thuật toán Greedy Max-Heap để tối thiểu hóa số giao dịch"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: "Danh sách nợ tối giản"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebtResponse"
+
+  /api/profile:
+    get:
+      tags: [Profile]
+      summary: "Lấy thông tin profile của user đang đăng nhập"
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: "Thông tin profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+
+  /api/profile/{userId}:
+    get:
+      tags: [Profile]
+      summary: "Lấy thông tin bank của user cụ thể (cho VietQR)"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: "Thông tin profile (bao gồm bank info)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "404":
+          description: "Không tìm thấy user"
+
+  /api/profile/bank:
+    put:
+      tags: [Profile]
+      summary: "Cập nhật thông tin ngân hàng"
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBankInfoRequest"
+      responses:
+        "200":
+          description: "Cập nhật thành công"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: "Validation error"

@@ -64,3 +64,15 @@ data class SimplifiedDebt(
     val toUsername: String,
     val amount: Double  // Số tiền fromUser cần trả cho toUser
 )
+
+// ==========================================
+// PAGINATED RESPONSE
+// ==========================================
+
+@Serializable
+data class PaginatedBillResponse(
+    val data: List<BillResponse>,
+    val total: Long,
+    val limit: Int,
+    val offset: Int
+)
