@@ -16,8 +16,7 @@ import org.koin.ktor.ext.inject
  * Group Routes — gọn gàng, chỉ nhận request → gọi service → trả response.
  * Logic nghiệp vụ nằm trong GroupService.
  */
-fun Route.groupRoutes() {
-    val groupService by inject<GroupService>()
+fun Route.groupRoutes(groupService: GroupService) {
 
     route("/groups") {
 
@@ -52,6 +51,15 @@ fun Route.groupRoutes() {
                 ?: throw ValidationException("Thiếu ID nhóm")
             val request = call.receive<AddMemberRequest>()
             val message = groupService.addMember(groupId, userId, request.usernameOrEmail)
+            call.respond(HttpStatusCode.OK, MessageResponse(message))
+        }
+
+        // POST /groups/{id}/join - Tự tham gia nhóm bằng ID
+        post("/{id}/join") {
+            val userId = call.currentUserId()
+            val groupId = call.parameters["id"]
+                ?: throw ValidationException("Thiếu ID nhóm")
+            val message = groupService.joinGroup(groupId, userId)
             call.respond(HttpStatusCode.OK, MessageResponse(message))
         }
 

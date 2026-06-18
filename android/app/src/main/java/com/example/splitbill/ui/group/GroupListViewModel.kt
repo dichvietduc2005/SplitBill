@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 sealed interface GroupListUiState {
   object Loading : GroupListUiState
-  data class Success(val groups: List<GroupResponse>) : GroupListUiState
+  data class Success(val groups: List<GroupResponse>, val actionMessage: String? = null) : GroupListUiState
   data class Error(val message: String) : GroupListUiState
 }
 
@@ -42,8 +42,42 @@ class GroupListViewModel(private val groupRepository: GroupRepository) : ViewMod
     viewModelScope.launch {
       val result = groupRepository.createGroup(name)
       if (result.isSuccess) {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = "Đã tạo nhóm thành công")
+        }
         loadGroups() // Reload
+      } else {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+        }
       }
+    }
+  }
+
+  fun joinGroup(groupId: String) {
+    viewModelScope.launch {
+      val result = groupRepository.joinGroup(groupId)
+      if (result.isSuccess) {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = result.getOrNull() ?: "Đã tham gia nhóm")
+        }
+        loadGroups() // Reload
+      } else {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+        }
+      }
+    }
+  }
+
+  fun clearActionMessage() {
+    val currentState = _uiState.value
+    if (currentState is GroupListUiState.Success) {
+      _uiState.value = currentState.copy(actionMessage = null)
     }
   }
 }

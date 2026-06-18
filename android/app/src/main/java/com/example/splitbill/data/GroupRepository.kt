@@ -63,4 +63,13 @@ class GroupRepository(private val tokenManager: TokenManager) {
       Result.failure(e)
     }
   }
+
+  suspend fun joinGroup(groupId: String): Result<String> {
+    return try {
+      val response: Map<String, String> = getClient().post("/api/groups/$groupId/join").body()
+      Result.success(response["message"] ?: "Đã tham gia nhóm")
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
 }

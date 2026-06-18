@@ -16,8 +16,7 @@ import org.koin.ktor.ext.inject
  * Logic nghiệp vụ nằm trong AuthService.
  * Rate Limiting được áp dụng cho cả register và login.
  */
-fun Route.userRoutes() {
-    val authService by inject<AuthService>()
+fun Route.userRoutes(authService: AuthService) {
 
     route("/auth") {
         rateLimit(RateLimitName("auth")) {

@@ -1,4 +1,4 @@
-﻿package com.example.splitbill.ui.bill
+package com.example.splitbill.ui.bill
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -31,6 +31,7 @@ import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.components.SplitBillCard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,10 +56,13 @@ fun AddBillScreen(
   // Auto-fill equal splits when amount changes
   LaunchedEffect(totalAmountText, splitMode) {
     if (splitMode == SplitMode.EQUAL && members.isNotEmpty()) {
-      val total = totalAmountText.toDoubleOrNull() ?: 0.0
-      val perPerson = if (members.isNotEmpty()) total / members.size else 0.0
-      members.forEach { member ->
-        splitAmounts[member.userId] = if (perPerson > 0) "%.0f".format(perPerson) else ""
+      val total = totalAmountText.filter { it.isDigit() }.toDoubleOrNull() ?: 0.0
+      val perPerson = Math.floor(total / members.size)
+      val remainder = total - (perPerson * members.size)
+      
+      members.forEachIndexed { index, member ->
+        val finalAmount = if (index == 0) perPerson + remainder else perPerson
+        splitAmounts[member.userId] = if (finalAmount > 0) String.format(Locale.US, "%,d", finalAmount.toLong()) else ""
       }
     }
   }
@@ -151,7 +155,16 @@ fun AddBillScreen(
                 Spacer(Modifier.height(Dimens.SpacingXS))
                 OutlinedTextField(
                   value = totalAmountText,
-                  onValueChange = { totalAmountText = it },
+                  onValueChange = { input -> 
+                    val clean = input.filter { it.isDigit() }
+                    if (clean.isNotEmpty()) {
+                      try {
+                        totalAmountText = String.format(Locale.US, "%,d", clean.toLong())
+                      } catch (e: Exception) { }
+                    } else {
+                      totalAmountText = ""
+                    }
+                  },
                   textStyle = MaterialTheme.typography.displayMedium.copy(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -306,7 +319,16 @@ fun AddBillScreen(
                 )
                 OutlinedTextField(
                   value = splitAmounts[member.userId] ?: "",
-                  onValueChange = { splitAmounts[member.userId] = it },
+                  onValueChange = { input -> 
+                    val clean = input.filter { it.isDigit() }
+                    if (clean.isNotEmpty()) {
+                      try {
+                        splitAmounts[member.userId] = String.format(Locale.US, "%,d", clean.toLong())
+                      } catch (e: Exception) { }
+                    } else {
+                      splitAmounts[member.userId] = ""
+                    }
+                  },
                   enabled = splitMode == SplitMode.CUSTOM,
                   modifier = Modifier.width(120.dp),
                   textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
@@ -329,9 +351,9 @@ fun AddBillScreen(
               Spacer(Modifier.height(Dimens.SpacingM))
               Button(
                 onClick = {
-                  val total = totalAmountText.toDoubleOrNull() ?: 0.0
+                  val total = totalAmountText.filter { it.isDigit() }.toDoubleOrNull() ?: 0.0
                   val splits = members.mapNotNull { member ->
-                    val amount = splitAmounts[member.userId]?.toDoubleOrNull() ?: 0.0
+                    val amount = splitAmounts[member.userId]?.filter { it.isDigit() }?.toDoubleOrNull() ?: 0.0
                     if (amount > 0) BillSplitItem(member.userId, amount) else null
                   }
                   viewModel.createBill(groupId, description, total, selectedPayerId, splits)

@@ -58,6 +58,13 @@ data class BillResponse(
   val splits: List<BillSplitResponse>,
   val createdAt: String
 )
+@Serializable
+data class PaginatedBillResponse(
+  val data: List<BillResponse>,
+  val total: Long,
+  val limit: Int,
+  val offset: Int
+)
 
 @Serializable
 data class BillSplitResponse(

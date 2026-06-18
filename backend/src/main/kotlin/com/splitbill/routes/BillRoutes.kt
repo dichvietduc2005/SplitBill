@@ -15,8 +15,7 @@ import org.koin.ktor.ext.inject
  * Logic nghiệp vụ nằm trong BillService.
  * Hỗ trợ phân trang (limit/offset) cho danh sách hóa đơn.
  */
-fun Route.billRoutes() {
-    val billService by inject<BillService>()
+fun Route.billRoutes(billService: BillService) {
 
     route("/bills") {
 

@@ -18,8 +18,8 @@ class BillRepository(private val tokenManager: TokenManager) {
 
   suspend fun getBillsForGroup(groupId: String): Result<List<BillResponse>> {
     return try {
-      val response: List<BillResponse> = getClient().get("/api/bills?groupId=$groupId").body()
-      Result.success(response)
+      val response: com.example.splitbill.data.api.PaginatedBillResponse = getClient().get("/api/bills?groupId=$groupId").body()
+      Result.success(response.data)
     } catch (e: Exception) {
       Result.failure(e)
     }
