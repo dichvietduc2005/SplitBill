@@ -49,12 +49,16 @@ class UserRepository {
     }
 
     suspend fun createUser(username: String, email: String, passwordHash: String): User? = DatabaseFactory.dbQuery {
-        val insertStatement = Users.insert {
+        val newId = UUID.randomUUID()
+        Users.insert {
+            it[Users.id] = newId
             it[Users.username] = username
             it[Users.email] = email
             it[Users.passwordHash] = passwordHash
         }
-        insertStatement.resultedValues?.singleOrNull()?.let { resultRowToUser(it) }
+        Users.selectAll().where { Users.id eq newId }
+            .map { resultRowToUser(it) }
+            .singleOrNull()
     }
 
     suspend fun updateBankInfo(userId: String, bankCode: String, accountNumber: String, accountName: String): Boolean = DatabaseFactory.dbQuery {

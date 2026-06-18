@@ -98,7 +98,7 @@ object Users : Table("users") {
     val bankCode = varchar("bank_code", 20).nullable()         // Ví dụ: "VCB", "TCB", "MB"
     val accountNumber = varchar("account_number", 30).nullable() // Số tài khoản ngân hàng
     val accountName = varchar("account_name", 100).nullable()   // Tên chủ tài khoản
-    val createdAt = datetime("created_at").default(LocalDateTime.now())
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -108,7 +108,7 @@ object Groups : Table("groups") {
     val id = uuid("id").autoGenerate()
     val name = varchar("name", 100)
     val createdBy = reference("created_by", Users.id)
-    val createdAt = datetime("created_at").default(LocalDateTime.now())
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -117,7 +117,7 @@ object Groups : Table("groups") {
 object GroupMembers : Table("group_members") {
     val groupId = reference("group_id", Groups.id)
     val userId = reference("user_id", Users.id)
-    val joinedAt = datetime("joined_at").default(LocalDateTime.now())
+    val joinedAt = datetime("joined_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(groupId, userId)
 }
@@ -129,7 +129,7 @@ object Bills : Table("bills") {
     val description = varchar("description", 255)
     val totalAmount = decimal("total_amount", 15, 2) // Lên tới 999 tỷ đồng, 2 chữ số thập phân
     val paidByUserId = reference("paid_by_user_id", Users.id)
-    val createdAt = datetime("created_at").default(LocalDateTime.now())
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
 }

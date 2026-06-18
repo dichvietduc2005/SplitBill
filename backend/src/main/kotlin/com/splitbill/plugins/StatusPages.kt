@@ -76,14 +76,14 @@ fun Application.configureStatusPages() {
             )
         }
 
-        // 5. Bắt tất cả exception không mong muốn — KHÔNG lộ stack trace
+        // 5. Bắt tất cả exception không mong muốn
         exception<Throwable> { call, cause ->
             logger.error("Unhandled exception", cause)
             call.respond(
                 HttpStatusCode.InternalServerError,
                 ErrorResponse(
                     status = 500,
-                    message = "Lỗi máy chủ nội bộ. Vui lòng thử lại sau.",
+                    message = "Lỗi 500: ${cause.message} (${cause.javaClass.simpleName})",
                     code = "INTERNAL_ERROR"
                 )
             )

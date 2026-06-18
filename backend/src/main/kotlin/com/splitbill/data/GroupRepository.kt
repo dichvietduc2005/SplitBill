@@ -19,23 +19,21 @@ data class GroupMember(
 
 class GroupRepository {
 
-    // Tạo nhóm mới và tự động thêm người tạo làm thành viên
     suspend fun createGroup(name: String, createdByUserId: String): Group? = DatabaseFactory.dbQuery {
-        val groupId = UUID.fromString(
-            Groups.insert {
-                it[Groups.name] = name
-                it[Groups.createdBy] = UUID.fromString(createdByUserId)
-            }.resultedValues?.singleOrNull()?.get(Groups.id)?.toString()
-                ?: return@dbQuery null
-        )
+        val newGroupId = UUID.randomUUID()
+        Groups.insert {
+            it[Groups.id] = newGroupId
+            it[Groups.name] = name
+            it[Groups.createdBy] = UUID.fromString(createdByUserId)
+        }
 
         // Tự động thêm người tạo vào nhóm
         GroupMembers.insert {
-            it[GroupMembers.groupId] = groupId
+            it[GroupMembers.groupId] = newGroupId
             it[GroupMembers.userId] = UUID.fromString(createdByUserId)
         }
 
-        Groups.selectAll().where { Groups.id eq groupId }
+        Groups.selectAll().where { Groups.id eq newGroupId }
             .map { resultRowToGroup(it) }
             .singleOrNull()
     }

@@ -19,6 +19,7 @@ object ApiService {
 
   fun createClient(token: String? = null): HttpClient {
     return HttpClient(OkHttp) {
+      expectSuccess = true // Thêm dòng này để ném lỗi HTTP (401, 500) thay vì cố parse text thành JSON
       install(ContentNegotiation) {
         json(Json {
           prettyPrint = true
@@ -38,4 +39,5 @@ object ApiService {
       }
     }
   }
+
 }

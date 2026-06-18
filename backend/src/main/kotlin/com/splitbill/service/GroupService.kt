@@ -81,6 +81,19 @@ class GroupService(
         return "Đã thêm '${targetUser.username}' vào nhóm"
     }
 
+    suspend fun joinGroup(groupId: String, requestingUserId: String): String {
+        // Validate group exists
+        val group = groupRepository.getGroupById(groupId)
+            ?: throw NotFoundException("Không tìm thấy nhóm với mã ID này")
+        
+        val added = groupRepository.addMember(groupId, requestingUserId)
+        if (!added) {
+            throw com.splitbill.exceptions.ConflictException("Bạn đã là thành viên của nhóm này rồi")
+        }
+
+        return "Đã tham gia nhóm '${group.name}'"
+    }
+
     suspend fun getMembers(groupId: String, userId: String): List<MemberResponse> {
         ensureMember(groupId, userId)
 

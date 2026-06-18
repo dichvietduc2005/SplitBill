@@ -86,6 +86,11 @@ fun Application.module() {
     // ==========================================
     // Đăng ký các API Routes
     // ==========================================
+    val authService by inject<com.splitbill.service.AuthService>()
+    val groupService by inject<com.splitbill.service.GroupService>()
+    val billService by inject<com.splitbill.service.BillService>()
+    val profileService by inject<com.splitbill.service.ProfileService>()
+
     routing {
         get("/") {
             call.respondText("Welcome to Split Bill API!")
@@ -97,7 +102,7 @@ fun Application.module() {
         swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
 
         route("/api") {
-            userRoutes()
+            userRoutes(authService)
 
             // Tất cả API bên dưới yêu cầu JWT token
             authenticate("auth-jwt") {
@@ -108,13 +113,13 @@ fun Application.module() {
                 }
 
                 // API Quản lý Nhóm
-                groupRoutes()
+                groupRoutes(groupService)
 
                 // API Quản lý Hóa đơn & Tối giản nợ
-                billRoutes()
+                billRoutes(billService)
 
                 // API Profile & Ngân hàng (VietQR)
-                profileRoutes()
+                profileRoutes(profileService)
             }
         }
     }

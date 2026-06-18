@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitbill.data.api.GroupResponse
 import com.example.splitbill.theme.Dimens
@@ -60,8 +62,20 @@ fun GroupListScreen(
   modifier: Modifier = Modifier
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+  LaunchedEffect(uiState) {
+    if (uiState is GroupListUiState.Success) {
+      val msg = (uiState as GroupListUiState.Success).actionMessage
+      if (msg != null) {
+        snackbarHostState.showSnackbar(msg)
+        viewModel.clearActionMessage()
+      }
+    }
+  }
+
   val listState = rememberLazyListState()
   var showCreateDialog by remember { mutableStateOf(false) }
+  var showJoinDialog by remember { mutableStateOf(false) }
 
   Scaffold(
     topBar = {
@@ -79,13 +93,29 @@ fun GroupListScreen(
       )
     },
     floatingActionButton = {
-      ScrollAwareFab(
-        listState = listState,
-        onClick = { showCreateDialog = true },
-        icon = Icons.Default.Add,
-        text = "Tạo Nhóm".localized()
-      )
+      // Hide FAB when scrolling down, show when scrolling up
+      AnimatedVisibility(
+        visible = listState.firstVisibleItemScrollOffset == 0 || !listState.isScrollInProgress,
+        enter = scaleIn() + fadeIn(),
+        exit = scaleOut() + fadeOut()
+      ) {
+        com.example.splitbill.ui.components.SpeedDialFab(
+          items = listOf(
+            com.example.splitbill.ui.components.SpeedDialItem(
+              icon = Icons.Default.Group,
+              label = "Tạo nhóm mới",
+              onClick = { showCreateDialog = true }
+            ),
+            com.example.splitbill.ui.components.SpeedDialItem(
+              icon = Icons.Default.ArrowForward,
+              label = "Tham gia nhóm",
+              onClick = { showJoinDialog = true }
+            )
+          )
+        )
+      }
     },
+    snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
     modifier = modifier.fillMaxSize()
   ) { paddingValues ->
     Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
@@ -132,6 +162,7 @@ fun GroupListScreen(
                     GroupCard(group = group, onClick = { onNavigateToGroup(group.id) })
                   }
                 }
+                item { Spacer(modifier = Modifier.height(80.dp)) }
               }
             }
           }
@@ -140,42 +171,72 @@ fun GroupListScreen(
     }
   }
 
-  // Create Group Dialog
+  // Create Group PremiumDialog
   if (showCreateDialog) {
     var groupName by remember { mutableStateOf("") }
-    AlertDialog(
+    com.example.splitbill.ui.components.PremiumDialog(
       onDismissRequest = { showCreateDialog = false },
-      title = { Text("Tạo nhóm mới".localized()) },
-      text = {
-        Column {
-          Text(
-            "Đặt tên cho nhóm của bạn:".localized(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-          Spacer(modifier = Modifier.height(Dimens.SpacingM))
-          OutlinedTextField(
-            value = groupName,
-            onValueChange = { groupName = it },
-            label = { Text("Tên nhóm (VD: Du lịch Đà Lạt)".localized()) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Default.Group, contentDescription = null) }
-          )
+      title = "Tạo nhóm mới".localized(),
+      icon = Icons.Default.Group,
+      confirmButtonText = "Tạo nhóm".localized(),
+      onConfirm = {
+        if (groupName.isNotBlank()) {
+          viewModel.createGroup(groupName.trim())
+          showCreateDialog = false
         }
       },
-      confirmButton = {
-        Button(
-          onClick = {
-            if (groupName.isNotBlank()) {
-              viewModel.createGroup(groupName.trim())
-              showCreateDialog = false
-            }
-          }
-        ) { Text("Tạo nhóm".localized()) }
+      dismissButtonText = "Hủy".localized(),
+      onDismiss = { showCreateDialog = false },
+      content = {
+        Text(
+          "Đặt tên cho nhóm của bạn:".localized(),
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingM))
+        OutlinedTextField(
+          value = groupName,
+          onValueChange = { groupName = it },
+          label = { Text("Tên nhóm (VD: Du lịch Đà Lạt)".localized()) },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+        )
+      }
+    )
+  }
+
+  // Join Group PremiumDialog
+  if (showJoinDialog) {
+    var groupIdInput by remember { mutableStateOf("") }
+    com.example.splitbill.ui.components.PremiumDialog(
+      onDismissRequest = { showJoinDialog = false },
+      title = "Tham gia nhóm".localized(),
+      icon = Icons.Default.ArrowForward,
+      confirmButtonText = "Tham gia".localized(),
+      onConfirm = {
+        if (groupIdInput.isNotBlank()) {
+          viewModel.joinGroup(groupIdInput.trim())
+          showJoinDialog = false
+        }
       },
-      dismissButton = {
-        TextButton(onClick = { showCreateDialog = false }) { Text("Hủy".localized()) }
+      dismissButtonText = "Hủy".localized(),
+      onDismiss = { showJoinDialog = false },
+      content = {
+        Text(
+          "Nhập mã ID của nhóm để tham gia:",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(Dimens.SpacingM))
+        OutlinedTextField(
+          value = groupIdInput,
+          onValueChange = { groupIdInput = it },
+          label = { Text("Mã ID nhóm") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+        )
       }
     )
   }

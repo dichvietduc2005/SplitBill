@@ -15,8 +15,7 @@ import org.koin.ktor.ext.inject
  * Profile Routes — gọn gàng, chỉ nhận request → gọi service → trả response.
  * Logic nghiệp vụ nằm trong ProfileService.
  */
-fun Route.profileRoutes() {
-    val profileService by inject<ProfileService>()
+fun Route.profileRoutes(profileService: ProfileService) {
 
     route("/profile") {
 
