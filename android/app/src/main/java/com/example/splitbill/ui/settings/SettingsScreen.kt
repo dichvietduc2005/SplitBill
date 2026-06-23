@@ -30,6 +30,7 @@ import com.example.splitbill.theme.SplitBillShapes
 import com.example.splitbill.ui.components.LoadingState
 import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
+import com.example.splitbill.ui.components.GradientButton
 import com.example.splitbill.ui.localization.localized
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -428,14 +429,15 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(Dimens.SpacingS))
         AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(4)) {
-          Button(
+          GradientButton(
             onClick = { showLogoutConfirm = true },
             modifier = Modifier
               .fillMaxWidth()
               .height(Dimens.ButtonHeight),
-            colors = ButtonDefaults.buttonColors(
-              containerColor = MaterialTheme.colorScheme.error
+            gradient = Brush.horizontalGradient(
+              listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
             ),
+            shadowColor = MaterialTheme.colorScheme.error,
             shape = SplitBillShapes.medium
           ) {
             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)

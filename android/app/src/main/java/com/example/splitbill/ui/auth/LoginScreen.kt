@@ -431,7 +431,7 @@ fun LoginScreen(
                   horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Button(
+                  com.example.splitbill.ui.components.GradientButton(
                     onClick = {
                       if (isLoginMode) {
                         viewModel.login(username.trim(), password)
@@ -447,7 +447,8 @@ fun LoginScreen(
                   ) {
                     Text(
                       text = if (isLoginMode) "Đăng Nhập".localized() else "Đăng Ký".localized(),
-                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                      color = Color.White
                     )
                   }
 

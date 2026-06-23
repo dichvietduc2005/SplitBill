@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +36,7 @@ data class SpeedDialItem(
 fun SpeedDialFab(
     items: List<SpeedDialItem>,
     modifier: Modifier = Modifier,
-    icon: ImageVector = Icons.Default.Add,
+    icon: ImageVector = Icons.Rounded.Add,
     containerColor: Color = MaterialTheme.colorScheme.primary,
     contentColor: Color = MaterialTheme.colorScheme.onPrimary
 ) {
@@ -74,16 +74,33 @@ fun SpeedDialFab(
             label = "fab_rotation"
         )
 
-        FloatingActionButton(
-            onClick = { expanded = !expanded },
-            containerColor = containerColor,
-            contentColor = contentColor,
-            shape = CircleShape,
-            modifier = Modifier.padding(end = 4.dp) // Slight padding to align with items
+        val gradient = androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(com.example.splitbill.theme.GradientOceanStart, com.example.splitbill.theme.GradientOceanEnd)
+        )
+        val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+        
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .padding(end = 4.dp)
+                .shadow(
+                    elevation = if (expanded) 2.dp else 8.dp,
+                    shape = CircleShape,
+                    spotColor = com.example.splitbill.theme.GradientOceanStart,
+                    ambientColor = com.example.splitbill.theme.GradientOceanStart
+                )
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(gradient)
+                .clickable {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    expanded = !expanded 
+                }
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = "Menu",
+                tint = Color.White,
                 modifier = Modifier.rotate(rotation)
             )
         }
@@ -114,16 +131,43 @@ private fun SpeedDialItemRow(item: SpeedDialItem, delayMillis: Int, onClick: () 
         
         Spacer(modifier = Modifier.width(Dimens.SpacingM))
 
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = item.color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = item.onColor ?: MaterialTheme.colorScheme.primary,
-            shape = CircleShape,
-            modifier = Modifier.size(48.dp)
+        // Haptic feedback for child item
+        val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+        val itemGradient = if (item.color != null) {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(item.color, item.color.copy(alpha = 0.8f))
+            )
+        } else {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(
+                    com.example.splitbill.theme.GradientOceanStart,
+                    com.example.splitbill.theme.GradientOceanEnd
+                )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .shadow(
+                    elevation = 4.dp,
+                    shape = CircleShape,
+                    spotColor = item.color ?: com.example.splitbill.theme.GradientOceanStart,
+                    ambientColor = item.color ?: com.example.splitbill.theme.GradientOceanStart
+                )
+                .clip(CircleShape)
+                .background(itemGradient)
+                .clickable {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
+                tint = item.onColor ?: Color.White,
                 modifier = Modifier.size(24.dp)
             )
         }
