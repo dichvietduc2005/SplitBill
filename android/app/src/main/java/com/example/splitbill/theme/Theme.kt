@@ -47,6 +47,11 @@ private val LightColorScheme = lightColorScheme(
   onSurfaceVariant = OnSurfaceVariantLight,
   outline = OutlineLight,
   outlineVariant = OutlineVariantLight,
+  surfaceContainerLowest = SurfaceContainerLowestLight,
+  surfaceContainerLow = SurfaceContainerLowLight,
+  surfaceContainer = SurfaceContainerLight,
+  surfaceContainerHigh = SurfaceContainerHighLight,
+  surfaceContainerHighest = SurfaceContainerHighestLight
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -74,6 +79,11 @@ private val DarkColorScheme = darkColorScheme(
   onSurfaceVariant = OnSurfaceVariantDark,
   outline = OutlineDark,
   outlineVariant = OutlineVariantDark,
+  surfaceContainerLowest = SurfaceContainerLowestDark,
+  surfaceContainerLow = SurfaceContainerLowDark,
+  surfaceContainer = SurfaceContainerDark,
+  surfaceContainerHigh = SurfaceContainerHighDark,
+  surfaceContainerHighest = SurfaceContainerHighestDark
 )
 
 // Custom Tokens for specific use cases
@@ -81,14 +91,31 @@ private val DarkColorScheme = darkColorScheme(
 class SplitBillCustomColors(
   val positiveAmount: Color,
   val negativeAmount: Color,
-  val isLight: Boolean
+  val isLight: Boolean,
+  // Badges
+  val badgeGroupBg: Color,
+  val badgeGroupIcon: Color,
+  val badgeBillBg: Color,
+  val badgeBillIcon: Color,
+  val badgeStatsBg: Color,
+  val badgeStatsIcon: Color,
+  val badgeMemberBg: Color,
+  val badgeMemberIcon: Color
 )
 
 val LocalSplitBillCustomColors = staticCompositionLocalOf {
   SplitBillCustomColors(
     positiveAmount = Color.Unspecified,
     negativeAmount = Color.Unspecified,
-    isLight = true
+    isLight = true,
+    badgeGroupBg = Color.Unspecified,
+    badgeGroupIcon = Color.Unspecified,
+    badgeBillBg = Color.Unspecified,
+    badgeBillIcon = Color.Unspecified,
+    badgeStatsBg = Color.Unspecified,
+    badgeStatsIcon = Color.Unspecified,
+    badgeMemberBg = Color.Unspecified,
+    badgeMemberIcon = Color.Unspecified
   )
 }
 
@@ -109,14 +136,38 @@ fun SplitBillTheme(
     else -> LightColorScheme
   }
 
-  // Instant color scheme transition for smooth performance (eliminates parallel animation jank)
+  // Instant color scheme transition for smooth performance
   val animatedColorScheme = targetColorScheme
   
   // Custom colors setup
   val customColors = if (darkTheme) {
-    SplitBillCustomColors(positiveAmount = PositiveAmountDark, negativeAmount = NegativeAmountDark, isLight = false)
+    SplitBillCustomColors(
+      positiveAmount = PositiveAmountDark, 
+      negativeAmount = NegativeAmountDark, 
+      isLight = false,
+      badgeGroupBg = BadgeGroupBgDark,
+      badgeGroupIcon = BadgeGroupIconDark,
+      badgeBillBg = BadgeBillBgDark,
+      badgeBillIcon = BadgeBillIconDark,
+      badgeStatsBg = BadgeStatsBgDark,
+      badgeStatsIcon = BadgeStatsIconDark,
+      badgeMemberBg = BadgeMemberBgDark,
+      badgeMemberIcon = BadgeMemberIconDark
+    )
   } else {
-    SplitBillCustomColors(positiveAmount = PositiveAmount, negativeAmount = NegativeAmount, isLight = true)
+    SplitBillCustomColors(
+      positiveAmount = PositiveAmount, 
+      negativeAmount = NegativeAmount, 
+      isLight = true,
+      badgeGroupBg = BadgeGroupBg,
+      badgeGroupIcon = BadgeGroupIcon,
+      badgeBillBg = BadgeBillBg,
+      badgeBillIcon = BadgeBillIcon,
+      badgeStatsBg = BadgeStatsBg,
+      badgeStatsIcon = BadgeStatsIcon,
+      badgeMemberBg = BadgeMemberBg,
+      badgeMemberIcon = BadgeMemberIcon
+    )
   }
 
   // Edge to edge setup for System Bars
@@ -124,8 +175,6 @@ fun SplitBillTheme(
   if (!view.isInEditMode) {
     SideEffect {
       val window = (view.context as Activity).window
-      // In a real app we might want transparent bars to draw behind them, 
-      // but WindowCompat setup helps match theme icons.
       WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
       WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
     }
@@ -139,48 +188,4 @@ fun SplitBillTheme(
       content = content
     )
   }
-}
-
-// Extension to animate Material3 ColorScheme
-@Composable
-private fun animateColorScheme(target: ColorScheme): ColorScheme {
-  val duration = 400
-  return ColorScheme(
-    primary = animateColorAsState(target.primary, tween(duration), label = "primary").value,
-    onPrimary = animateColorAsState(target.onPrimary, tween(duration), label = "onPrimary").value,
-    primaryContainer = animateColorAsState(target.primaryContainer, tween(duration), label = "primaryContainer").value,
-    onPrimaryContainer = animateColorAsState(target.onPrimaryContainer, tween(duration), label = "onPrimaryContainer").value,
-    inversePrimary = animateColorAsState(target.inversePrimary, tween(duration), label = "inversePrimary").value,
-    secondary = animateColorAsState(target.secondary, tween(duration), label = "secondary").value,
-    onSecondary = animateColorAsState(target.onSecondary, tween(duration), label = "onSecondary").value,
-    secondaryContainer = animateColorAsState(target.secondaryContainer, tween(duration), label = "secondaryContainer").value,
-    onSecondaryContainer = animateColorAsState(target.onSecondaryContainer, tween(duration), label = "onSecondaryContainer").value,
-    tertiary = animateColorAsState(target.tertiary, tween(duration), label = "tertiary").value,
-    onTertiary = animateColorAsState(target.onTertiary, tween(duration), label = "onTertiary").value,
-    tertiaryContainer = animateColorAsState(target.tertiaryContainer, tween(duration), label = "tertiaryContainer").value,
-    onTertiaryContainer = animateColorAsState(target.onTertiaryContainer, tween(duration), label = "onTertiaryContainer").value,
-    background = animateColorAsState(target.background, tween(duration), label = "background").value,
-    onBackground = animateColorAsState(target.onBackground, tween(duration), label = "onBackground").value,
-    surface = animateColorAsState(target.surface, tween(duration), label = "surface").value,
-    onSurface = animateColorAsState(target.onSurface, tween(duration), label = "onSurface").value,
-    surfaceVariant = animateColorAsState(target.surfaceVariant, tween(duration), label = "surfaceVariant").value,
-    onSurfaceVariant = animateColorAsState(target.onSurfaceVariant, tween(duration), label = "onSurfaceVariant").value,
-    surfaceTint = animateColorAsState(target.surfaceTint, tween(duration), label = "surfaceTint").value,
-    inverseSurface = animateColorAsState(target.inverseSurface, tween(duration), label = "inverseSurface").value,
-    inverseOnSurface = animateColorAsState(target.inverseOnSurface, tween(duration), label = "inverseOnSurface").value,
-    error = animateColorAsState(target.error, tween(duration), label = "error").value,
-    onError = animateColorAsState(target.onError, tween(duration), label = "onError").value,
-    errorContainer = animateColorAsState(target.errorContainer, tween(duration), label = "errorContainer").value,
-    onErrorContainer = animateColorAsState(target.onErrorContainer, tween(duration), label = "onErrorContainer").value,
-    outline = animateColorAsState(target.outline, tween(duration), label = "outline").value,
-    outlineVariant = animateColorAsState(target.outlineVariant, tween(duration), label = "outlineVariant").value,
-    scrim = animateColorAsState(target.scrim, tween(duration), label = "scrim").value,
-    surfaceBright = animateColorAsState(target.surfaceBright, tween(duration), label = "surfaceBright").value,
-    surfaceContainer = animateColorAsState(target.surfaceContainer, tween(duration), label = "surfaceContainer").value,
-    surfaceContainerHigh = animateColorAsState(target.surfaceContainerHigh, tween(duration), label = "surfaceContainerHigh").value,
-    surfaceContainerHighest = animateColorAsState(target.surfaceContainerHighest, tween(duration), label = "surfaceContainerHighest").value,
-    surfaceContainerLow = animateColorAsState(target.surfaceContainerLow, tween(duration), label = "surfaceContainerLow").value,
-    surfaceContainerLowest = animateColorAsState(target.surfaceContainerLowest, tween(duration), label = "surfaceContainerLowest").value,
-    surfaceDim = animateColorAsState(target.surfaceDim, tween(duration), label = "surfaceDim").value,
-  )
 }

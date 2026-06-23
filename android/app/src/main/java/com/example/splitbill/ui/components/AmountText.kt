@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -22,7 +23,13 @@ fun AmountText(
   style: TextStyle = LocalTextStyle.current,
   isDebt: Boolean? = null // null means neutral (e.g., total bill amount)
 ) {
-  val formattedAmount = NumberFormat.getCurrencyInstance(Locale("vi", "VN")).format(amount)
+  val animatedAmount by androidx.compose.animation.core.animateFloatAsState(
+    targetValue = amount.toFloat(),
+    animationSpec = tween(durationMillis = 800, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+    label = "amount_counter"
+  )
+
+  val formattedAmount = NumberFormat.getCurrencyInstance(Locale("vi", "VN")).format(animatedAmount.toDouble())
   
   val textColor = when (isDebt) {
     true -> LocalSplitBillCustomColors.current.negativeAmount
@@ -32,18 +39,10 @@ fun AmountText(
 
   val finalColor = if (textColor != Color.Unspecified) textColor else style.color
 
-  AnimatedContent(
-    targetState = formattedAmount,
-    transitionSpec = {
-      fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
-    },
-    label = "amount_animation",
+  Text(
+    text = formattedAmount,
+    style = style,
+    color = finalColor,
     modifier = modifier
-  ) { targetText ->
-    Text(
-      text = targetText,
-      style = style,
-      color = finalColor
-    )
-  }
+  )
 }

@@ -2,6 +2,7 @@ package com.example.splitbill.ui.group
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.rounded.Login
+import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,11 +42,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitbill.data.api.GroupResponse
 import com.example.splitbill.theme.Dimens
+import com.example.splitbill.theme.LocalSplitBillCustomColors
 import com.example.splitbill.theme.Motion
 import com.example.splitbill.ui.components.EmptyState
 import com.example.splitbill.ui.components.GroupListSkeleton
@@ -78,6 +83,7 @@ fun GroupListScreen(
   var showJoinDialog by remember { mutableStateOf(false) }
 
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
         title = "Nhóm của tôi".localized(),
@@ -86,7 +92,7 @@ fun GroupListScreen(
             Icon(
               imageVector = Icons.Default.Settings,
               contentDescription = "Cài đặt".localized(),
-              tint = MaterialTheme.colorScheme.primary
+              tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
         }
@@ -102,12 +108,12 @@ fun GroupListScreen(
         com.example.splitbill.ui.components.SpeedDialFab(
           items = listOf(
             com.example.splitbill.ui.components.SpeedDialItem(
-              icon = Icons.Default.Group,
+              icon = Icons.Rounded.RocketLaunch,
               label = "Tạo nhóm mới",
               onClick = { showCreateDialog = true }
             ),
             com.example.splitbill.ui.components.SpeedDialItem(
-              icon = Icons.Default.ArrowForward,
+              icon = Icons.Rounded.Login,
               label = "Tham gia nhóm",
               onClick = { showJoinDialog = true }
             )
@@ -127,6 +133,7 @@ fun GroupListScreen(
           EmptyState(
             title = "Đã xảy ra lỗi".localized(),
             message = state.message,
+            emoji = "⚠️",
             modifier = Modifier.align(Alignment.Center)
           )
         }
@@ -135,6 +142,7 @@ fun GroupListScreen(
             EmptyState(
               title = "Chưa có nhóm nào".localized(),
               message = "Hãy tạo nhóm mới để bắt đầu chia tiền nhé!".localized(),
+              emoji = "🎉",
               modifier = Modifier.align(Alignment.Center)
             )
           } else {
@@ -177,7 +185,7 @@ fun GroupListScreen(
     com.example.splitbill.ui.components.PremiumDialog(
       onDismissRequest = { showCreateDialog = false },
       title = "Tạo nhóm mới".localized(),
-      icon = Icons.Default.Group,
+      icon = Icons.Rounded.RocketLaunch,
       confirmButtonText = "Tạo nhóm".localized(),
       onConfirm = {
         if (groupName.isNotBlank()) {
@@ -212,7 +220,7 @@ fun GroupListScreen(
     com.example.splitbill.ui.components.PremiumDialog(
       onDismissRequest = { showJoinDialog = false },
       title = "Tham gia nhóm".localized(),
-      icon = Icons.Default.ArrowForward,
+      icon = Icons.Rounded.Login,
       confirmButtonText = "Tham gia".localized(),
       onConfirm = {
         if (groupIdInput.isNotBlank()) {
@@ -244,6 +252,7 @@ fun GroupListScreen(
 
 @Composable
 fun GroupCard(group: GroupResponse, onClick: () -> Unit) {
+  val customColors = LocalSplitBillCustomColors.current
   SplitBillCard(
     onClick = onClick,
     modifier = Modifier.fillMaxWidth()
@@ -255,17 +264,22 @@ fun GroupCard(group: GroupResponse, onClick: () -> Unit) {
       Box(
         modifier = Modifier
           .padding(end = Dimens.SpacingM)
+          .size(48.dp)
+          .clip(CircleShape)
+          .background(customColors.badgeGroupBg),
+        contentAlignment = Alignment.Center
       ) {
         Icon(
           imageVector = Icons.Default.Groups,
           contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary
+          tint = customColors.badgeGroupIcon,
+          modifier = Modifier.size(24.dp)
         )
       }
       Column {
         Text(
           text = group.name,
-          style = MaterialTheme.typography.titleMedium,
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
           color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(Dimens.SpacingXXS))

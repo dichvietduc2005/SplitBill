@@ -12,11 +12,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.GroupAdd
+import androidx.compose.material.icons.rounded.PostAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +41,8 @@ import com.example.splitbill.ui.components.SpeedDialItem
 import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.localization.localized
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +87,7 @@ fun GroupDetailScreen(
   }
 
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
         title = state.group?.name ?: "Chi tiết nhóm",
@@ -107,12 +113,12 @@ fun GroupDetailScreen(
         SpeedDialFab(
           items = listOf(
             SpeedDialItem(
-              icon = Icons.Default.Receipt,
+              icon = Icons.Rounded.PostAdd,
               label = "Thêm hóa đơn",
               onClick = { onAddBill(state.group?.id ?: "", state.members) }
             ),
             SpeedDialItem(
-              icon = Icons.Default.PersonAdd,
+              icon = Icons.Rounded.GroupAdd,
               label = "Mời thành viên",
               onClick = { showAddMemberDialog = true }
             )
@@ -134,11 +140,25 @@ fun GroupDetailScreen(
         modifier = Modifier.padding(paddingValues).fillMaxSize()
       )
     } else {
-      LazyColumn(
-        modifier = Modifier.padding(paddingValues).fillMaxSize(),
-        contentPadding = PaddingValues(Dimens.SpacingM),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
+      var isRefreshing by remember { mutableStateOf(false) }
+      LaunchedEffect(state.isLoading) {
+          if (!state.isLoading) isRefreshing = false
+      }
+      val pullRefreshState = rememberPullToRefreshState()
+      PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { 
+            isRefreshing = true
+            viewModel.loadAll() 
+        },
+        state = pullRefreshState,
+        modifier = Modifier.padding(paddingValues).fillMaxSize()
       ) {
+        LazyColumn(
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(Dimens.SpacingM),
+          verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
+        ) {
 
         // --- Hero Summary Card ---
         item {
@@ -221,6 +241,7 @@ fun GroupDetailScreen(
         }
 
         item { Spacer(Modifier.height(80.dp)) } // Space for FAB
+      }
       }
     }
   }
@@ -396,16 +417,37 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
     label = "total_spent"
   )
 
+  // Animated aurora gradient
+  val transition = rememberInfiniteTransition(label = "aurora_transition")
+  val translateAnim by transition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1000f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(10000, easing = LinearEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "aurora_translate"
+  )
+
   Box(
     modifier = Modifier
       .fillMaxWidth()
+      .shadow(
+        elevation = 16.dp,
+        shape = RoundedCornerShape(24.dp),
+        spotColor = com.example.splitbill.theme.GradientAuroraStart,
+        ambientColor = com.example.splitbill.theme.GradientAuroraStart
+      )
       .clip(RoundedCornerShape(24.dp))
       .background(
         brush = Brush.linearGradient(
           colors = listOf(
-            MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.primaryContainer
-          )
+            com.example.splitbill.theme.GradientAuroraStart,
+            com.example.splitbill.theme.GradientAuroraMid,
+            com.example.splitbill.theme.GradientAuroraEnd
+          ),
+          start = androidx.compose.ui.geometry.Offset(translateAnim, translateAnim),
+          end = androidx.compose.ui.geometry.Offset(translateAnim + 800f, translateAnim + 800f)
         )
       )
       .padding(Dimens.SpacingL)
@@ -414,22 +456,22 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
       Text(
         text = "Tổng chi của nhóm",
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+        color = Color.White.copy(alpha = 0.85f)
       )
       Spacer(Modifier.height(Dimens.SpacingXS))
       AmountText(
         amount = animatedTotal.toDouble(),
-        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-        isDebt = false
+        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, color = Color.White),
+        isDebt = null
       )
       Spacer(Modifier.height(Dimens.SpacingS))
       Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f))
+        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White.copy(alpha = 0.85f))
         Spacer(Modifier.width(4.dp))
         Text(
           text = "$memberCount thành viên • $billCount hóa đơn",
           style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+          color = Color.White.copy(alpha = 0.85f)
         )
       }
     }
@@ -441,6 +483,7 @@ private fun ActionGrid(
   onSuggestSplit: () -> Unit,
   onStats: () -> Unit
 ) {
+  val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
@@ -449,19 +492,30 @@ private fun ActionGrid(
       icon = Icons.Default.AccountBalanceWallet,
       label = "Gợi ý chia tiền",
       onClick = onSuggestSplit,
-      modifier = Modifier.weight(1f)
+      modifier = Modifier.weight(1f),
+      badgeBg = customColors.badgeBillBg,
+      badgeIconTint = customColors.badgeBillIcon
     )
     ActionItem(
       icon = Icons.Default.BarChart,
       label = "Thống kê",
       onClick = onStats,
-      modifier = Modifier.weight(1f)
+      modifier = Modifier.weight(1f),
+      badgeBg = customColors.badgeStatsBg,
+      badgeIconTint = customColors.badgeStatsIcon
     )
   }
 }
 
 @Composable
-private fun ActionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ActionItem(
+  icon: androidx.compose.ui.graphics.vector.ImageVector, 
+  label: String, 
+  onClick: () -> Unit, 
+  modifier: Modifier = Modifier,
+  badgeBg: Color = MaterialTheme.colorScheme.primaryContainer,
+  badgeIconTint: Color = MaterialTheme.colorScheme.onPrimaryContainer
+) {
   SplitBillCard(
     onClick = onClick,
     modifier = modifier,
@@ -475,10 +529,10 @@ private fun ActionItem(icon: androidx.compose.ui.graphics.vector.ImageVector, la
         modifier = Modifier
           .size(40.dp)
           .clip(CircleShape)
-          .background(MaterialTheme.colorScheme.primaryContainer),
+          .background(badgeBg),
         contentAlignment = Alignment.Center
       ) {
-        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = label, tint = badgeIconTint, modifier = Modifier.size(20.dp))
       }
       Spacer(Modifier.width(Dimens.SpacingS))
       Text(
@@ -497,19 +551,7 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth()
     ) {
-      Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.size(40.dp)
-      ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-          Text(
-            text = member.username.first().uppercaseChar().toString(),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSecondaryContainer
-          )
-        }
-      }
+      com.example.splitbill.ui.components.GradientAvatar(name = member.username)
       Spacer(Modifier.width(Dimens.SpacingM))
       Column(modifier = Modifier.weight(1f)) {
         Text(member.username, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
@@ -591,23 +633,81 @@ private fun StatRow(label: String, amount: Double) {
   }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
   var expanded by remember { mutableStateOf(false) }
   var showDeleteDialog by remember { mutableStateOf(false) }
+  val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
 
-  SplitBillCard(
-    onClick = { expanded = !expanded },
-    modifier = Modifier.fillMaxWidth().animateContentSize(
-      animationSpec = Motion.springGentle()
-    )
-  ) {
-    Column {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+  val dismissState = rememberSwipeToDismissBoxState(
+    confirmValueChange = { dismissValue ->
+      if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+        showDeleteDialog = true
+        false // Wait for dialog confirmation
+      } else {
+        false
+      }
+    }
+  )
+
+  SwipeToDismissBox(
+    state = dismissState,
+    enableDismissFromStartToEnd = false,
+    backgroundContent = {
+      val color by animateColorAsState(
+        targetValue = when (dismissState.targetValue) {
+          SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
+          else -> Color.Transparent
+        },
+        label = "swipe_color"
+      )
+      
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .clip(com.example.splitbill.theme.SplitBillShapes.medium)
+          .background(color)
+          .padding(end = Dimens.SpacingL),
+        contentAlignment = Alignment.CenterEnd
       ) {
+        if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+          Icon(
+            Icons.Default.Delete,
+            contentDescription = "Xóa",
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.size(28.dp)
+          )
+        }
+      }
+    }
+  ) {
+    SplitBillCard(
+      onClick = { expanded = !expanded },
+      modifier = Modifier.fillMaxWidth().animateContentSize(
+        animationSpec = Motion.springGentle()
+      )
+    ) {
+      Column {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+        Box(
+          modifier = Modifier
+            .padding(end = Dimens.SpacingM)
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(customColors.badgeBillBg),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(
+            imageVector = Icons.Default.Receipt,
+            contentDescription = null,
+            tint = customColors.badgeBillIcon,
+            modifier = Modifier.size(20.dp)
+          )
+        }
         Column(modifier = Modifier.weight(1f)) {
           Text(
             bill.description,
@@ -623,9 +723,6 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
         }
         Column(horizontalAlignment = Alignment.End) {
           AmountText(amount = bill.totalAmount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-          IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-          }
         }
       }
 
@@ -649,6 +746,7 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
         }
       }
     }
+  }
   }
 
   if (showDeleteDialog) {

@@ -11,11 +11,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Wallet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,7 +34,9 @@ import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.components.SplitBillCard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.splitbill.ui.components.ConfettiOverlay
 import java.util.Locale
+import com.example.splitbill.data.TokenManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,9 +49,16 @@ fun AddBillScreen(
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+  val context = LocalContext.current
+  val tokenManager = remember { TokenManager(context) }
+  val token by tokenManager.getToken().collectAsState(initial = null)
+  val currentUserId = remember(token) { TokenManager.getUserIdFromToken(token) }
+
   var description by rememberSaveable { mutableStateOf("") }
   var totalAmountText by rememberSaveable { mutableStateOf("") }
-  var selectedPayerId by rememberSaveable { mutableStateOf(members.firstOrNull()?.userId ?: "") }
+  var selectedPayerId by rememberSaveable(currentUserId, members) { 
+    mutableStateOf(currentUserId ?: members.firstOrNull()?.userId ?: "") 
+  }
   // Map: userId -> amount text they owe
   val splitAmounts = remember { mutableStateMapOf<String, String>() }
   var splitMode by rememberSaveable { mutableStateOf(SplitMode.EQUAL) }
@@ -67,7 +79,6 @@ fun AddBillScreen(
     }
   }
 
-  val context = LocalContext.current
   val settingsManager = remember { com.example.splitbill.data.SettingsManager(context) }
   val pushEnabled by settingsManager.pushEnabled.collectAsState(initial = true)
   val pushGroupName = "Chia hóa đơn".localized()
@@ -94,6 +105,7 @@ fun AddBillScreen(
 
   Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
+      containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
       topBar = {
         SplitBillTopBar(
           title = "Thêm hóa đơn",
@@ -198,13 +210,19 @@ fun AddBillScreen(
           var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay(Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            OutlinedTextField(
+            TextField(
               value = description,
               onValueChange = { description = it },
-              label = { Text("Mô tả hóa đơn (Ăn tối, Taxi...)") },
-              modifier = Modifier.fillMaxWidth(),
-              leadingIcon = { Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+              label = { Text("Tên hóa đơn (Ăn tối, Taxi...)") },
+              modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)),
+              leadingIcon = { Icon(Icons.Rounded.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
               shape = RoundedCornerShape(16.dp),
+              colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
+              ),
               singleLine = true
             )
           }
@@ -219,15 +237,21 @@ fun AddBillScreen(
               expanded = payerDropdownExpanded,
               onExpandedChange = { payerDropdownExpanded = !payerDropdownExpanded }
             ) {
-              OutlinedTextField(
+              TextField(
                 value = members.find { it.userId == selectedPayerId }?.username ?: "Chọn người trả",
                 onValueChange = {},
                 readOnly = true,
-                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                label = { Text("Ai đã trả tiền?") },
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).shadow(4.dp, RoundedCornerShape(16.dp)),
+                label = { Text("Ai là người trả tiền?") },
                 shape = RoundedCornerShape(16.dp),
+                colors = TextFieldDefaults.colors(
+                  focusedIndicatorColor = Color.Transparent,
+                  unfocusedIndicatorColor = Color.Transparent,
+                  focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                  unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(payerDropdownExpanded) },
-                leadingIcon = { Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                leadingIcon = { Icon(Icons.Rounded.Wallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
               )
               ExposedDropdownMenu(
                 expanded = payerDropdownExpanded,
@@ -299,19 +323,7 @@ fun AddBillScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
               ) {
-                Surface(
-                  shape = CircleShape,
-                  color = MaterialTheme.colorScheme.primaryContainer,
-                  modifier = Modifier.size(40.dp)
-                ) {
-                  Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(
-                      member.username.first().uppercaseChar().toString(),
-                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                      color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                  }
-                }
+                com.example.splitbill.ui.components.GradientAvatar(name = member.username)
                 Text(
                   member.username,
                   style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -349,7 +361,7 @@ fun AddBillScreen(
           AnimatedVisibility(visible = visible, enter = slideInVertically(animationSpec = Motion.tweenSlow(), initialOffsetY = { it / 2 }) + fadeIn()) {
             Column {
               Spacer(Modifier.height(Dimens.SpacingM))
-              Button(
+              com.example.splitbill.ui.components.GradientButton(
                 onClick = {
                   val total = totalAmountText.filter { it.isDigit() }.toDoubleOrNull() ?: 0.0
                   val splits = members.mapNotNull { member ->
@@ -363,11 +375,11 @@ fun AddBillScreen(
                 enabled = uiState !is AddBillUiState.Loading && totalAmountText.isNotBlank() && description.isNotBlank()
               ) {
                 if (uiState is AddBillUiState.Loading) {
-                  CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = MaterialTheme.colorScheme.onPrimary)
+                  CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = Color.White)
                 } else {
-                  Icon(Icons.Default.CheckCircle, contentDescription = null)
+                  Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
                   Spacer(Modifier.width(Dimens.SpacingS))
-                  Text("Lưu hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                  Text("Lưu hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
                 }
               }
               Spacer(Modifier.height(Dimens.SpacingXL))
@@ -388,6 +400,9 @@ fun AddBillScreen(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         contentAlignment = Alignment.Center
       ) {
+        // Confetti!
+        ConfettiOverlay()
+
         val scale = remember { Animatable(0f) }
         LaunchedEffect(Unit) {
           scale.animateTo(

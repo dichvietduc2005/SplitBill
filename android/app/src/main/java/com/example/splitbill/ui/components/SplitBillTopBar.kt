@@ -36,7 +36,7 @@ fun SplitBillTopBar(
         color = MaterialTheme.colorScheme.onSurface
       )
     },
-    modifier = modifier.shadow(elevation = 2.dp, spotColor = Color.Transparent),
+    modifier = modifier.shadow(elevation = 1.dp, spotColor = Color.Transparent),
     navigationIcon = {
       if (canNavigateBack) {
         IconButton(onClick = onNavigateBack) {
@@ -50,8 +50,8 @@ fun SplitBillTopBar(
     },
     actions = actions,
     colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), // Slight transparency for glass effect
-      scrolledContainerColor = MaterialTheme.colorScheme.surface,
+      containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f), // Slight transparency for glass effect
+      scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
       titleContentColor = MaterialTheme.colorScheme.onSurface,
       navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
       actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant

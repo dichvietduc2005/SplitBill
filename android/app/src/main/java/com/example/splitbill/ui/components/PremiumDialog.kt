@@ -93,7 +93,7 @@ fun PremiumDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
                 ) {
-                    Button(
+                    com.example.splitbill.ui.components.GradientButton(
                         onClick = onConfirm,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(16.dp),
@@ -101,7 +101,8 @@ fun PremiumDialog(
                     ) {
                         Text(
                             text = confirmButtonText,
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = androidx.compose.ui.graphics.Color.White
                         )
                     }
 
