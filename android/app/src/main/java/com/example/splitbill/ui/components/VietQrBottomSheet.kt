@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -251,53 +252,158 @@ fun VietQrBottomSheet(
         Spacer(Modifier.height(Dimens.SpacingM))
 
         if (!isCreditorMode) {
-          // ── [1] Chọn app ngân hàng của người chuyển (Deep Link) ──────────────
-          Text(
-            "Chọn app ngân hàng của bạn để thanh toán:",
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth()
-          )
-          Spacer(Modifier.height(Dimens.SpacingS))
+          // ── [1] Thanh toán nhanh ──────────────────────────────────────────
+          Card(
+            colors = CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+          ) {
+            Column(modifier = Modifier.padding(Dimens.SpacingM)) {
+              Text(
+                "Thanh toán nhanh",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+              )
+              Spacer(Modifier.height(Dimens.SpacingS))
 
-          OutlinedButton(
+              // Bước 1
+              Row(verticalAlignment = Alignment.Top) {
+                Box(
+                  modifier = Modifier
+                    .size(24.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text("1", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+                }
+                Spacer(Modifier.width(Dimens.SpacingS))
+                Text(
+                  "Bấm nút bên dưới → App ngân hàng mở lên & mã QR tự lưu vào máy",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+              }
+              Spacer(Modifier.height(6.dp))
+
+              // Bước 2
+              Row(verticalAlignment = Alignment.Top) {
+                Box(
+                  modifier = Modifier
+                    .size(24.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text("2", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+                }
+                Spacer(Modifier.width(Dimens.SpacingS))
+                Text(
+                  "Trong app ngân hàng → chọn Quét QR (thường ở trang chủ)",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+              }
+              Spacer(Modifier.height(6.dp))
+
+              // Bước 3
+              Row(verticalAlignment = Alignment.Top) {
+                Box(
+                  modifier = Modifier
+                    .size(24.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text("3", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimary)
+                }
+                Spacer(Modifier.width(Dimens.SpacingS))
+                Text(
+                  "Bấm biểu tượng 🖼️ Thư viện → chọn ảnh QR vừa lưu → Thông tin tự điền!",
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary
+                )
+              }
+            }
+          }
+
+          Spacer(Modifier.height(Dimens.SpacingM))
+
+          // Nút mở app ngân hàng
+          Button(
             onClick = { showPayerBankSelection = true },
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+              containerColor = MaterialTheme.colorScheme.primary
+            )
           ) {
             Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(Dimens.SpacingS))
-            Text("Mở danh sách Ngân hàng", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            Text("Chọn ngân hàng & thanh toán", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
           }
-
-          Spacer(Modifier.height(Dimens.SpacingS))
-
-          Text(
-            "Hệ thống sẽ tự động copy Số Tài Khoản và mở app ngân hàng của bạn",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-          )
 
           if (showPayerBankSelection) {
             com.example.splitbill.ui.profile.BankSelectionBottomSheet(
               onDismiss = { showPayerBankSelection = false },
               onBankSelected = { payerAppId ->
-                // Copy account number
+                // 1. Lưu QR vào thư viện
+                saveImageToGallery(context, qrImageUrl, showToast = false)
+
+                // 2. Copy số tài khoản vào clipboard
                 val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("Account Number", accountNumber)
                 clipboardManager.setPrimaryClip(clip)
-                Toast.makeText(context, "Đã copy số tài khoản. Vui lòng dán vào app ngân hàng!", Toast.LENGTH_LONG).show()
 
-                // Deep link chuẩn NAPAS sử dụng BIN thay vì Tên viết tắt
-                val bin = BIN_MAP[bankCode.uppercase()] ?: bankCode.lowercase()
-                
-                // Tạo chuỗi EMVCo VietQR với nội dung KHÔNG chứa Uri.encode (nếu có Uri.encode thì độ dài chuỗi bị sai lệch làm app ngân hàng từ chối)
-                val qrString = VietQrGenerator.generate(bin, accountNumber, amountLong.toString(), description)
-                
-                val deepLinkToOpen = "https://dl.vietqr.io/pay?app=${payerAppId.lowercase()}&ba=${accountNumber}@${bin}&am=${amountLong}&tn=${Uri.encode(description)}&qr=${Uri.encode(qrString)}"
-                openVietQrDeepLink(context, deepLinkToOpen, payerAppId)
+                // Package names của các ngân hàng tại Việt Nam
+                val packageNames = mapOf(
+                  "vcb" to "com.VCB",
+                  "tcb" to "vn.com.techcombank.bb.app",
+                  "mb" to "com.mbmobile",
+                  "bidv" to "com.bidv.smartbanking",
+                  "icb" to "com.vietinbank.ipay",
+                  "vpb" to "com.vpbank.neo",
+                  "acb" to "com.acb.mb.online",
+                  "tpb" to "com.tpb.mb.gprs",
+                  "msb" to "com.msb.digital",
+                  "stb" to "com.sacombank.mbanking",
+                  "vib" to "com.vib.vibmobile",
+                  "vib-2" to "com.vib.vibmobile",
+                  "hdb" to "com.hdb.mobile",
+                  "ocb" to "com.ocb.mobilebanking",
+                  "shb" to "com.shb.smartbanking",
+                  "lpb" to "com.lpb.mobilebanking",
+                  "cake" to "com.vpbank.cake",
+                  "vba" to "com.vnpay.vba"
+                )
+
+                val appIdLower = payerAppId.lowercase()
+                val packageName = packageNames[appIdLower]
+
+                var launched = false
+                if (packageName != null) {
+                  try {
+                    val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+                    if (intent != null) {
+                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                      context.startActivity(intent)
+                      launched = true
+                    }
+                  } catch (e: Exception) { }
+                }
+
+                if (launched) {
+                  Toast.makeText(
+                    context,
+                    "✅ Đã lưu QR & mở app. Chọn Quét QR → Thư viện ảnh → chọn ảnh QR!",
+                    Toast.LENGTH_LONG
+                  ).show()
+                } else {
+                  Toast.makeText(
+                    context,
+                    "Không tìm thấy app. Mã QR đã lưu vào Thư viện ảnh, hãy mở app ngân hàng thủ công.",
+                    Toast.LENGTH_LONG
+                  ).show()
+                }
               }
             )
           }
@@ -544,7 +650,7 @@ private fun QrToggleSection(
   }
 }
 
-private fun saveImageToGallery(context: Context, imageUrl: String) {
+private fun saveImageToGallery(context: Context, imageUrl: String, showToast: Boolean = true) {
   CoroutineScope(Dispatchers.IO).launch {
     try {
       val url = java.net.URL(imageUrl)
@@ -565,14 +671,18 @@ private fun saveImageToGallery(context: Context, imageUrl: String) {
         resolver.openOutputStream(uri)?.use { outputStream ->
           bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outputStream)
         }
-        withContext(Dispatchers.Main) {
-          Toast.makeText(context, "Đã lưu mã QR vào thư viện ảnh!", Toast.LENGTH_LONG).show()
+        if (showToast) {
+          withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Đã lưu mã QR vào thư viện ảnh!", Toast.LENGTH_LONG).show()
+          }
         }
       }
     } catch (e: Exception) {
       e.printStackTrace()
-      withContext(Dispatchers.Main) {
-        Toast.makeText(context, "Lỗi khi lưu ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+      if (showToast) {
+        withContext(Dispatchers.Main) {
+          Toast.makeText(context, "Lỗi khi lưu ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
       }
     }
   }

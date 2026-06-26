@@ -43,6 +43,7 @@ class AuthRepository(private val tokenManager: TokenManager) {
 
   suspend fun logout() {
     tokenManager.deleteToken()
+    tokenManager.deleteBiometricToken()
   }
 
   suspend fun isLoggedIn(): Boolean {

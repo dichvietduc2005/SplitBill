@@ -2,7 +2,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <application
+    <!-- Yêu cầu quyền để truy vấn các app ngân hàng trên Android 11+ -->
+    <queries>
+        <package android:name="com.VCB" />
+        <package android:name="vn.com.techcombank.bb.app" />
+        <package android:name="com.mbmobile" />
+        <package android:name="com.bidv.smartbanking" />
+        <package android:name="com.vietinbank.ipay" />
+        <package android:name="com.vpbank.neo" />
+        <package android:name="com.acb.mb.online" />
+        <package android:name="com.tpb.mb.gprs" />
+        <package android:name="com.msb.digital" />
+        <package android:name="com.sacombank.mbanking" />
+        <package android:name="com.vib.vibmobile" />
+        <package android:name="com.hdb.mobile" />
+        <package android:name="com.ocb.mobilebanking" />
+        <package android:name="com.shb.smartbanking" />
+        <package android:name="com.lpb.mobilebanking" />
+        <package android:name="com.vpbank.cake" />
+        <package android:name="com.vnpay.vba" />
+    </queries>    <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

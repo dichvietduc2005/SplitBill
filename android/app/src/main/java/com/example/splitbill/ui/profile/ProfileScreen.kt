@@ -71,6 +71,10 @@ fun ProfileScreen(
   var accountName by remember { mutableStateOf("") }
   var showSaveSuccess by remember { mutableStateOf(false) }
 
+  LaunchedEffect(Unit) {
+    viewModel.loadProfile()
+  }
+
   // Load form khi profile được tải
   LaunchedEffect(uiState) {
     if (uiState is ProfileUiState.Success) {
