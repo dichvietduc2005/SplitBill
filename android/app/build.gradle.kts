@@ -103,4 +103,7 @@ dependencies {
   
   // Biometric Auth
   implementation(libs.androidx.biometric)
+  
+  // Chrome Custom Tabs (for VietQR deep link redirect)
+  implementation(libs.androidx.browser)
 }

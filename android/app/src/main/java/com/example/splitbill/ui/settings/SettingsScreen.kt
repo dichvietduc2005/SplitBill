@@ -52,6 +52,10 @@ fun SettingsScreen(
   var showLogoutConfirm by remember { mutableStateOf(false) }
   var showLanguagePicker by remember { mutableStateOf(false) }
 
+  LaunchedEffect(Unit) {
+    viewModel.loadProfile()
+  }
+
   Scaffold(
     topBar = {
       SplitBillTopBar(
