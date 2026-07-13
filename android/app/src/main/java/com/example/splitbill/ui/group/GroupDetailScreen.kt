@@ -417,62 +417,135 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
     label = "total_spent"
   )
 
-  // Animated aurora gradient
-  val transition = rememberInfiniteTransition(label = "aurora_transition")
-  val translateAnim by transition.animateFloat(
-    initialValue = 0f,
-    targetValue = 1000f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(10000, easing = LinearEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "aurora_translate"
-  )
-
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .shadow(
-        elevation = 16.dp,
-        shape = RoundedCornerShape(24.dp),
-        spotColor = com.example.splitbill.theme.GradientAuroraStart,
-        ambientColor = com.example.splitbill.theme.GradientAuroraStart
-      )
-      .clip(RoundedCornerShape(24.dp))
-      .background(
-        brush = Brush.linearGradient(
-          colors = listOf(
-            com.example.splitbill.theme.GradientAuroraStart,
-            com.example.splitbill.theme.GradientAuroraMid,
-            com.example.splitbill.theme.GradientAuroraEnd
-          ),
-          start = androidx.compose.ui.geometry.Offset(translateAnim, translateAnim),
-          end = androidx.compose.ui.geometry.Offset(translateAnim + 800f, translateAnim + 800f)
-        )
-      )
-      .padding(Dimens.SpacingL)
+  Column(
+    modifier = Modifier.fillMaxWidth(),
+    verticalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
   ) {
-    Column {
-      Text(
-        text = "Tổng chi của nhóm",
-        style = MaterialTheme.typography.labelMedium,
-        color = Color.White.copy(alpha = 0.85f)
-      )
-      Spacer(Modifier.height(Dimens.SpacingXS))
-      AmountText(
-        amount = animatedTotal.toDouble(),
-        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, color = Color.White),
-        isDebt = null
-      )
-      Spacer(Modifier.height(Dimens.SpacingS))
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White.copy(alpha = 0.85f))
-        Spacer(Modifier.width(4.dp))
-        Text(
-          text = "$memberCount thành viên • $billCount hóa đơn",
-          style = MaterialTheme.typography.bodySmall,
-          color = Color.White.copy(alpha = 0.85f)
-        )
+    // Block 1: Total Spent (Full Width, Taller/Spacious Hero Card)
+    SplitBillCard(
+      modifier = Modifier.fillMaxWidth(),
+      containerColor = MaterialTheme.colorScheme.primaryContainer
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(vertical = Dimens.SpacingS), // Taller vertical padding to make card roomier
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column {
+          Text(
+            text = "Tổng chi nhóm",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+          )
+          Spacer(Modifier.height(Dimens.SpacingS))
+          AmountText(
+            amount = animatedTotal.toDouble(),
+            style = MaterialTheme.typography.headlineLarge.copy(
+              fontWeight = FontWeight.ExtraBold, 
+              color = MaterialTheme.colorScheme.onPrimaryContainer
+            ),
+            isDebt = null
+          )
+        }
+        Box(
+          modifier = Modifier
+            .size(56.dp) // Larger icon box
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp)),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(
+            Icons.Default.Payments, 
+            contentDescription = null, 
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp) // Larger icon
+          )
+        }
+      }
+    }
+
+    // Block 2 & 3: Members & Bills (Divided in half below)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+    ) {
+      // Left Half: Members
+      SplitBillCard(
+        modifier = Modifier.weight(1f),
+        containerColor = com.example.splitbill.theme.BadgeMemberBg
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column {
+            Text(
+              "Thành viên", 
+              style = MaterialTheme.typography.labelSmall, 
+              color = com.example.splitbill.theme.BadgeMemberIcon.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+              text = "$memberCount",
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+              color = com.example.splitbill.theme.BadgeMemberIcon
+            )
+          }
+          Box(
+            modifier = Modifier
+              .size(36.dp)
+              .background(MaterialTheme.colorScheme.surface, CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              Icons.Default.Group, 
+              contentDescription = null, 
+              tint = com.example.splitbill.theme.BadgeMemberIcon, 
+              modifier = Modifier.size(18.dp)
+            )
+          }
+        }
+      }
+
+      // Right Half: Bills
+      SplitBillCard(
+        modifier = Modifier.weight(1f),
+        containerColor = com.example.splitbill.theme.BadgeBillBg
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column {
+            Text(
+              "Hóa đơn", 
+              style = MaterialTheme.typography.labelSmall, 
+              color = com.example.splitbill.theme.BadgeBillIcon.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+              text = "$billCount",
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+              color = com.example.splitbill.theme.BadgeBillIcon
+            )
+          }
+          Box(
+            modifier = Modifier
+              .size(36.dp)
+              .background(MaterialTheme.colorScheme.surface, CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              Icons.Default.Receipt, 
+              contentDescription = null, 
+              tint = com.example.splitbill.theme.BadgeBillIcon, 
+              modifier = Modifier.size(18.dp)
+            )
+          }
+        }
       }
     }
   }
@@ -486,7 +559,7 @@ private fun ActionGrid(
   val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
   Row(
     modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
+    horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
   ) {
     ActionItem(
       icon = Icons.Default.AccountBalanceWallet,
@@ -519,27 +592,34 @@ private fun ActionItem(
   SplitBillCard(
     onClick = onClick,
     modifier = modifier,
-    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    containerColor = badgeBg // Use the badge background color directly for the card background
   ) {
     Row(
-      verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.padding(vertical = Dimens.SpacingXS)
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
     ) {
-      Box(
-        modifier = Modifier
-          .size(40.dp)
-          .clip(CircleShape)
-          .background(badgeBg),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(icon, contentDescription = label, tint = badgeIconTint, modifier = Modifier.size(20.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = label,
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+          color = badgeIconTint
+        )
       }
       Spacer(Modifier.width(Dimens.SpacingS))
-      Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onSurface
-      )
+      Box(
+        modifier = Modifier
+          .size(36.dp)
+          .background(MaterialTheme.colorScheme.surface, CircleShape),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          icon, 
+          contentDescription = label, 
+          tint = badgeIconTint, 
+          modifier = Modifier.size(18.dp)
+        )
+      }
     }
   }
 }

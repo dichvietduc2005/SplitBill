@@ -85,7 +85,10 @@ fun DebtSummaryScreen(
             var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) { visible = true }
             AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-              SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+              SplitBillCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+              ) {
                 Column {
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -136,10 +139,8 @@ fun DebtSummaryScreen(
                 visible = true
               }
               AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(1)) {
-                Card(
-                  colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                  ),
+                SplitBillCard(
+                  containerColor = MaterialTheme.colorScheme.secondaryContainer,
                   modifier = Modifier.fillMaxWidth()
                 ) {
                   Row(

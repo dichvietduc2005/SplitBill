@@ -74,9 +74,7 @@ fun SpeedDialFab(
             label = "fab_rotation"
         )
 
-        val gradient = androidx.compose.ui.graphics.Brush.horizontalGradient(
-            listOf(com.example.splitbill.theme.GradientOceanStart, com.example.splitbill.theme.GradientOceanEnd)
-        )
+        val gradient = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
         val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
         
         Box(
@@ -86,8 +84,8 @@ fun SpeedDialFab(
                 .shadow(
                     elevation = if (expanded) 2.dp else 8.dp,
                     shape = CircleShape,
-                    spotColor = com.example.splitbill.theme.GradientOceanStart,
-                    ambientColor = com.example.splitbill.theme.GradientOceanStart
+                    spotColor = MaterialTheme.colorScheme.primary,
+                    ambientColor = MaterialTheme.colorScheme.primary
                 )
                 .size(56.dp)
                 .clip(CircleShape)
@@ -139,12 +137,7 @@ private fun SpeedDialItemRow(item: SpeedDialItem, delayMillis: Int, onClick: () 
                 listOf(item.color, item.color.copy(alpha = 0.8f))
             )
         } else {
-            androidx.compose.ui.graphics.Brush.linearGradient(
-                listOf(
-                    com.example.splitbill.theme.GradientOceanStart,
-                    com.example.splitbill.theme.GradientOceanEnd
-                )
-            )
+            androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
         }
 
         Box(
@@ -153,8 +146,8 @@ private fun SpeedDialItemRow(item: SpeedDialItem, delayMillis: Int, onClick: () 
                 .shadow(
                     elevation = 4.dp,
                     shape = CircleShape,
-                    spotColor = item.color ?: com.example.splitbill.theme.GradientOceanStart,
-                    ambientColor = item.color ?: com.example.splitbill.theme.GradientOceanStart
+                    spotColor = item.color ?: MaterialTheme.colorScheme.primary,
+                    ambientColor = item.color ?: MaterialTheme.colorScheme.primary
                 )
                 .clip(CircleShape)
                 .background(itemGradient)

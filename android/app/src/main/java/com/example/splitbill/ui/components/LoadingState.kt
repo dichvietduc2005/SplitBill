@@ -14,13 +14,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.SplitBillShapes
 
 @Composable
 fun ShimmerAnimation(
   modifier: Modifier = Modifier,
-  shape: androidx.compose.ui.graphics.Shape = SplitBillShapes.medium
+  shape: androidx.compose.ui.graphics.Shape = SplitBillShapes.large
 ) {
   val shimmerColors = listOf(
     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -133,32 +135,89 @@ fun GroupListSkeleton(modifier: Modifier = Modifier) {
     modifier = modifier.padding(Dimens.SpacingM),
     verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
   ) {
-    repeat(4) {
-      SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.fillMaxWidth()
-        ) {
+    // 1. Hero Card Skeleton (Full Width)
+    SplitBillCard(
+      modifier = Modifier.fillMaxWidth(),
+      containerColor = MaterialTheme.colorScheme.primaryContainer
+    ) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column {
           ShimmerAnimation(
-            modifier = Modifier.size(40.dp),
-            shape = SplitBillShapes.small
+            modifier = Modifier
+              .width(60.dp)
+              .height(12.dp)
           )
-          Spacer(Modifier.width(Dimens.SpacingM))
-          Column(modifier = Modifier.weight(1f)) {
-            ShimmerAnimation(
-              modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .height(16.dp)
-            )
-            Spacer(Modifier.height(Dimens.SpacingS))
-            ShimmerAnimation(
-              modifier = Modifier
-                .fillMaxWidth(0.35f)
-                .height(12.dp)
-            )
-          }
+          Spacer(Modifier.height(Dimens.SpacingXS))
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(90.dp)
+              .height(24.dp)
+          )
         }
+        ShimmerAnimation(
+          modifier = Modifier.size(56.dp),
+          shape = CircleShape
+        )
       }
+    }
+
+    // 2. Bento Grid of Groups (2 columns, staggered height representation)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+    ) {
+      // Left Column
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+      ) {
+        GroupCardSkeleton(textLines = 1)
+        GroupCardSkeleton(textLines = 2)
+      }
+      // Right Column
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+      ) {
+        GroupCardSkeleton(textLines = 2)
+        GroupCardSkeleton(textLines = 1)
+      }
+    }
+  }
+}
+
+@Composable
+private fun GroupCardSkeleton(modifier: Modifier = Modifier, textLines: Int = 1) {
+  SplitBillCard(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+      ShimmerAnimation(
+        modifier = Modifier.size(48.dp),
+        shape = CircleShape
+      )
+      Spacer(modifier = Modifier.height(Dimens.SpacingM))
+      ShimmerAnimation(
+        modifier = Modifier
+          .fillMaxWidth(0.85f)
+          .height(16.dp)
+      )
+      if (textLines > 1) {
+        Spacer(modifier = Modifier.height(Dimens.SpacingXXS))
+        ShimmerAnimation(
+          modifier = Modifier
+            .fillMaxWidth(0.5f)
+            .height(16.dp)
+        )
+      }
+      Spacer(modifier = Modifier.height(Dimens.SpacingS))
+      ShimmerAnimation(
+        modifier = Modifier
+          .fillMaxWidth(0.4f)
+          .height(12.dp)
+      )
     }
   }
 }
@@ -169,38 +228,131 @@ fun GroupDetailSkeleton(modifier: Modifier = Modifier) {
     modifier = modifier.padding(Dimens.SpacingM),
     verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
   ) {
-    // Summary card skeleton
-    SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-      Column {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceAround
-        ) {
-          repeat(3) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-              ShimmerAnimation(
-                modifier = Modifier
-                  .width(60.dp)
-                  .height(12.dp)
-              )
-              Spacer(Modifier.height(Dimens.SpacingXS))
-              ShimmerAnimation(
-                modifier = Modifier
-                  .width(48.dp)
-                  .height(20.dp)
-              )
-            }
-          }
+    // 1. Hero Card Skeleton (Total Spent - Full Width, spacious)
+    SplitBillCard(
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(vertical = Dimens.SpacingS),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column {
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(80.dp)
+              .height(12.dp)
+          )
+          Spacer(Modifier.height(Dimens.SpacingS))
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(140.dp)
+              .height(28.dp) // Large amount text
+          )
         }
-        Spacer(Modifier.height(Dimens.SpacingM))
         ShimmerAnimation(
           modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-          shape = SplitBillShapes.medium
+            .size(56.dp),
+          shape = RoundedCornerShape(14.dp)
         )
       }
     }
+
+    // 2. Members & Bills Row Skeleton (Divided in half)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+    ) {
+      // Left: Members Skeleton
+      SplitBillCard(
+        modifier = Modifier.weight(1f)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column {
+            ShimmerAnimation(
+              modifier = Modifier
+                .width(60.dp)
+                .height(10.dp)
+            )
+            Spacer(Modifier.height(6.dp))
+            ShimmerAnimation(
+              modifier = Modifier
+                .width(30.dp)
+                .height(18.dp)
+            )
+          }
+          ShimmerAnimation(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape
+          )
+        }
+      }
+
+      // Right: Bills Skeleton
+      SplitBillCard(
+        modifier = Modifier.weight(1f)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Column {
+            ShimmerAnimation(
+              modifier = Modifier
+                .width(50.dp)
+                .height(10.dp)
+            )
+            Spacer(Modifier.height(6.dp))
+            ShimmerAnimation(
+              modifier = Modifier
+                .width(30.dp)
+                .height(18.dp)
+            )
+          }
+          ShimmerAnimation(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape
+          )
+        }
+      }
+    }
+
+    // 3. Actions Row Skeleton (Divided in half)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
+    ) {
+      repeat(2) {
+        SplitBillCard(
+          modifier = Modifier.weight(1f)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            ShimmerAnimation(
+              modifier = Modifier
+                .width(80.dp)
+                .height(16.dp)
+            )
+            ShimmerAnimation(
+              modifier = Modifier.size(36.dp),
+              shape = CircleShape
+            )
+          }
+        }
+      }
+    }
+
+    Spacer(Modifier.height(Dimens.SpacingS))
 
     // Bill title skeleton
     ShimmerAnimation(
@@ -209,8 +361,8 @@ fun GroupDetailSkeleton(modifier: Modifier = Modifier) {
         .height(18.dp)
     )
 
-    // Bill cards skeleton
-    repeat(3) {
+    // Bill list items skeleton
+    repeat(2) {
       SplitBillCard(modifier = Modifier.fillMaxWidth()) {
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -293,5 +445,103 @@ fun DebtSummarySkeleton(modifier: Modifier = Modifier) {
         }
       }
     }
+  }
+}
+
+@Composable
+fun ProfileSkeleton(modifier: Modifier = Modifier) {
+  Column(
+    modifier = modifier.padding(Dimens.SpacingM),
+    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
+  ) {
+    // 1. Header Card Skeleton (User Info)
+    SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        ShimmerAnimation(
+          modifier = Modifier.size(56.dp),
+          shape = CircleShape
+        )
+        Spacer(Modifier.width(Dimens.SpacingM))
+        Column {
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(120.dp)
+              .height(18.dp)
+          )
+          Spacer(Modifier.height(Dimens.SpacingXS))
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(180.dp)
+              .height(14.dp)
+          )
+        }
+      }
+    }
+
+    // 2. VietQR Card Skeleton
+    SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+      Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          ShimmerAnimation(
+            modifier = Modifier.size(32.dp),
+            shape = RoundedCornerShape(8.dp)
+          )
+          Spacer(Modifier.width(Dimens.SpacingS))
+          ShimmerAnimation(
+            modifier = Modifier
+              .width(140.dp)
+              .height(16.dp)
+          )
+        }
+        Spacer(Modifier.height(Dimens.SpacingS))
+        ShimmerAnimation(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(12.dp)
+        )
+      }
+    }
+
+    // 3. Bank Info Card Skeleton (Form)
+    SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)) {
+        ShimmerAnimation(
+          modifier = Modifier
+            .width(130.dp)
+            .height(16.dp)
+        )
+        // Bank Selection box skeleton
+        ShimmerAnimation(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+          shape = RoundedCornerShape(12.dp)
+        )
+        // Account Number textfield skeleton
+        ShimmerAnimation(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+          shape = RoundedCornerShape(12.dp)
+        )
+        // Account Name textfield skeleton
+        ShimmerAnimation(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+          shape = RoundedCornerShape(12.dp)
+        )
+      }
+    }
+
+    Spacer(Modifier.height(Dimens.SpacingS))
+
+    // 4. Save Button Skeleton
+    ShimmerAnimation(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(56.dp),
+      shape = RoundedCornerShape(12.dp)
+    )
   }
 }

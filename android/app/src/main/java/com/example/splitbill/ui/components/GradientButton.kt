@@ -25,8 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
-import com.example.splitbill.theme.GradientOceanEnd
-import com.example.splitbill.theme.GradientOceanStart
+import androidx.compose.ui.graphics.SolidColor
 import com.example.splitbill.theme.SplitBillShapes
 
 @Composable
@@ -35,8 +34,8 @@ fun GradientButton(
   modifier: Modifier = Modifier,
   enabled: Boolean = true,
   shape: Shape = SplitBillShapes.medium,
-  gradient: Brush = Brush.horizontalGradient(listOf(GradientOceanStart, GradientOceanEnd)),
-  shadowColor: Color = GradientOceanStart,
+  gradient: Brush = SolidColor(Color(0xFF84C236)), // Default to Primary color
+  shadowColor: Color = Color(0xFF84C236),
   contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
   content: @Composable RowScope.() -> Unit
 ) {
@@ -56,13 +55,13 @@ fun GradientButton(
   Surface(
     modifier = modifier
       .scale(scale)
-      .clip(shape)
       .shadow(
         elevation = if (enabled && !isPressed) 8.dp else 2.dp,
         shape = shape,
-        spotColor = if (enabled) shadowColor else Color.Transparent,
-        ambientColor = if (enabled) shadowColor else Color.Transparent
+        spotColor = if (enabled) shadowColor.copy(alpha = 0.25f) else Color.Transparent, // Increased alpha for visibility
+        ambientColor = if (enabled) shadowColor.copy(alpha = 0.08f) else Color.Transparent
       )
+      .clip(shape)
       .clickable(
         interactionSource = interactionSource,
         indication = androidx.compose.foundation.LocalIndication.current,

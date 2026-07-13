@@ -26,15 +26,15 @@ fun SplitBillCard(
   onClick: (() -> Unit)? = null,
   containerColor: Color = Color.Unspecified,
   contentColor: Color = Color.Unspecified,
-  elevation: androidx.compose.ui.unit.Dp = Dimens.ElevationLevel0,
-  showBorder: Boolean = false,
+  elevation: androidx.compose.ui.unit.Dp = 16.dp, // Default larger elevation
+  shape: androidx.compose.ui.graphics.Shape = SplitBillShapes.large,
   content: @Composable ColumnScope.() -> Unit
 ) {
   val haptic = LocalHapticFeedback.current
 
-  // Determine actual colors (using M3 surfaceContainer by default for depth)
+  // Glassmorphism removed in favor of solid Bento colors.
   val actualContainerColor = if (containerColor == Color.Unspecified) {
-    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f) // Glassmorphism semi-transparent
+    MaterialTheme.colorScheme.surfaceContainerLowest 
   } else {
     containerColor
   }
@@ -45,44 +45,36 @@ fun SplitBillCard(
     contentColor
   }
 
-  // Soft glow border for glassmorphism
-  val border = if (showBorder) {
-    BorderStroke(
-      width = 1.dp,
-      brush = Brush.linearGradient(
-        colors = listOf(
-          Color.White.copy(alpha = 0.3f),
-          Color.White.copy(alpha = 0.05f)
-        )
-      )
-    )
-  } else null
+  val shadowModifier = modifier.shadow(
+    elevation = elevation,
+    shape = shape,
+    spotColor = Color.Black.copy(alpha = 0.22f), // Stronger shadow
+    ambientColor = Color.Black.copy(alpha = 0.08f)
+  )
 
-  val baseModifier = if (onClick != null) {
-    modifier
-      .clip(SplitBillShapes.medium)
+  val finalModifier = if (onClick != null) {
+    shadowModifier
+      .clip(shape)
       .clickable {
           haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
           onClick()
       }
   } else {
-    modifier
+    shadowModifier
   }
 
   Card(
-    modifier = baseModifier.shadow(
-      elevation = elevation.coerceAtLeast(8.dp),
-      shape = SplitBillShapes.medium,
-      spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), // Subtle primary-tinted glow
-      ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+    modifier = finalModifier,
+    shape = shape,
+    border = androidx.compose.foundation.BorderStroke(
+      width = 1.dp,
+      color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f) // Faint, modern border to define edges without being harsh
     ),
-    shape = SplitBillShapes.medium,
     colors = CardDefaults.cardColors(
       containerColor = actualContainerColor,
       contentColor = actualContentColor
     ),
-    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp), // Using custom shadow above
-    border = border
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Handled by custom shadow modifier above
   ) {
     Column(
       modifier = Modifier.padding(Dimens.SpacingM),

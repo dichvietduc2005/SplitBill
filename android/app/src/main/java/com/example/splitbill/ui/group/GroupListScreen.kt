@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Groups
@@ -78,7 +80,7 @@ fun GroupListScreen(
     }
   }
 
-  val listState = rememberLazyListState()
+  val listState = rememberLazyStaggeredGridState()
   var showCreateDialog by remember { mutableStateOf(false) }
   var showJoinDialog by remember { mutableStateOf(false) }
 
@@ -86,16 +88,7 @@ fun GroupListScreen(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
-        title = "Nhóm của tôi".localized(),
-        actions = {
-          IconButton(onClick = onNavigateToSettings) {
-            Icon(
-              imageVector = Icons.Default.Settings,
-              contentDescription = "Cài đặt".localized(),
-              tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-        }
+        title = "Nhóm của tôi".localized()
       )
     },
     floatingActionButton = {
@@ -150,12 +143,55 @@ fun GroupListScreen(
               isRefreshing = false,
               onRefresh = { viewModel.loadGroups() }
             ) {
-              LazyColumn(
+              LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(2),
                 state = listState,
                 contentPadding = PaddingValues(Dimens.SpacingM),
-                verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM),
+                verticalItemSpacing = Dimens.BentoGap,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap),
                 modifier = Modifier.fillMaxSize()
               ) {
+                // HERO CARD (Full Width)
+                item(span = StaggeredGridItemSpan.FullLine) {
+                  SplitBillCard(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingM)
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      modifier = Modifier.fillMaxWidth()
+                    ) {
+                      Column {
+                        Text(
+                          text = "Tổng quan",
+                          style = MaterialTheme.typography.titleMedium,
+                          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                        Spacer(Modifier.height(Dimens.SpacingXS))
+                        Text(
+                          text = "${state.groups.size} Nhóm",
+                          style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                          color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                      }
+                      Box(
+                        modifier = Modifier
+                          .size(56.dp)
+                          .background(MaterialTheme.colorScheme.surface, CircleShape),
+                        contentAlignment = Alignment.Center
+                      ) {
+                        Icon(
+                          Icons.Default.Groups,
+                          contentDescription = null,
+                          tint = MaterialTheme.colorScheme.primary,
+                          modifier = Modifier.size(32.dp)
+                        )
+                      }
+                    }
+                  }
+                }
+
                 itemsIndexed(state.groups, key = { _, group -> group.id }) { index, group ->
                   // Staggered entrance
                   var visible by remember { mutableStateOf(false) }
@@ -170,7 +206,7 @@ fun GroupListScreen(
                     GroupCard(group = group, onClick = { onNavigateToGroup(group.id) })
                   }
                 }
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                item(span = StaggeredGridItemSpan.FullLine) { Spacer(modifier = Modifier.height(80.dp)) }
               }
             }
           }
@@ -257,38 +293,46 @@ fun GroupCard(group: GroupResponse, onClick: () -> Unit) {
     onClick = onClick,
     modifier = Modifier.fillMaxWidth()
   ) {
-    Row(
-      verticalAlignment = Alignment.CenterVertically,
+    Column(
       modifier = Modifier.fillMaxWidth()
     ) {
-      Box(
-        modifier = Modifier
-          .padding(end = Dimens.SpacingM)
-          .size(48.dp)
-          .clip(CircleShape)
-          .background(customColors.badgeGroupBg),
-        contentAlignment = Alignment.Center
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
       ) {
-        Icon(
-          imageVector = Icons.Default.Groups,
-          contentDescription = null,
-          tint = customColors.badgeGroupIcon,
-          modifier = Modifier.size(24.dp)
-        )
+        Box(
+          modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(customColors.badgeGroupBg),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(
+            imageVector = Icons.Default.Groups,
+            contentDescription = null,
+            tint = customColors.badgeGroupIcon,
+            modifier = Modifier.size(24.dp)
+          )
+        }
+        // Có thể thêm badge notification ở đây trong tương lai
       }
-      Column {
-        Text(
-          text = group.name,
-          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-          color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(Dimens.SpacingXXS))
-        Text(
-          text = "${group.memberCount} " + "thành viên".localized(),
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
+      
+      Spacer(modifier = Modifier.height(Dimens.SpacingM))
+      
+      Text(
+        text = group.name,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 2,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+      )
+      Spacer(modifier = Modifier.height(Dimens.SpacingXXS))
+      Text(
+        text = "${group.memberCount} " + "thành viên".localized(),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
     }
   }
 }
