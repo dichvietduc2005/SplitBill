@@ -6,9 +6,11 @@ import androidx.compose.ui.unit.dp
 
 // Fluent Design inspired shapes (slightly more rounded than standard Material)
 val SplitBillShapes = Shapes(
-  extraSmall = RoundedCornerShape(4.dp),
-  small = RoundedCornerShape(8.dp),
-  medium = RoundedCornerShape(16.dp),
-  large = RoundedCornerShape(24.dp),
+  extraSmall = RoundedCornerShape(8.dp),
+  small = RoundedCornerShape(12.dp),
+  medium = RoundedCornerShape(20.dp),
+  large = RoundedCornerShape(28.dp),
   extraLarge = RoundedCornerShape(32.dp)
 )
+
+val BentoCorner = RoundedCornerShape(28.dp)

@@ -2,129 +2,116 @@ package com.example.splitbill.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Premium Teal / Emerald Palette (Primary)
-val PrimaryLight = Color(0xFF006C5B)
+// Premium Fresh Green Palette (Primary)
+val PrimaryLight = Color(0xFF84C236) // Fresh vibrant green
 val OnPrimaryLight = Color(0xFFFFFFFF)
-val PrimaryContainerLight = Color(0xFF75F8DC)
-val OnPrimaryContainerLight = Color(0xFF00201A)
+val PrimaryContainerLight = Color(0xFFE2F5D6) // Very light green for hero background
+val OnPrimaryContainerLight = Color(0xFF2D4710)
 
-// Secondary (Subdued Green/Teal)
-val SecondaryLight = Color(0xFF4A635E)
-val OnSecondaryLight = Color(0xFFFFFFFF)
-val SecondaryContainerLight = Color(0xFFCCE8E0)
-val OnSecondaryContainerLight = Color(0xFF05201B)
+// Secondary (Subdued Green/Grey-green)
+val SecondaryLight = Color(0xFFA3CD72)
+val OnSecondaryLight = Color(0xFF1D2D0C)
+val SecondaryContainerLight = Color(0xFFF1F8E9)
+val OnSecondaryContainerLight = Color(0xFF33691E)
 
-// Tertiary (Amber for highlights, bills, warnings)
-val TertiaryLight = Color(0xFF8A5100)
+// Tertiary (Orange/Coral for highlights, alerts, badges)
+val TertiaryLight = Color(0xFFF07800) // Extracted from user image character
 val OnTertiaryLight = Color(0xFFFFFFFF)
-val TertiaryContainerLight = Color(0xFFFFDCBE)
-val OnTertiaryContainerLight = Color(0xFF2C1600)
+val TertiaryContainerLight = Color(0xFFFFE0B2)
+val OnTertiaryContainerLight = Color(0xFFE65100)
 
-// Error Colors (Fluent Red)
-val ErrorLight = Color(0xFFC50F1F)
+// Error Colors
+val ErrorLight = Color(0xFFE53935)
 val OnErrorLight = Color(0xFFFFFFFF)
-val ErrorContainerLight = Color(0xFFFFDAD6)
-val OnErrorContainerLight = Color(0xFF410002)
+val ErrorContainerLight = Color(0xFFFFCDD2)
+val OnErrorContainerLight = Color(0xFFB71C1C)
 
 // Background & Surface
-val BackgroundLight = Color(0xFFF4F7F5) // Slightly tinted light background for lowest
-val OnBackgroundLight = Color(0xFF191C1B)
-val SurfaceLight = Color(0xFFF4F7F5)
-val OnSurfaceLight = Color(0xFF191C1B)
+val BackgroundLight = Color(0xFFE2E6DC) // Darker organic background (90% lightness) for distinct card contrast
+val OnBackgroundLight = Color(0xFF1E1E1E) // Near black text
+val SurfaceLight = Color(0xFFFFFFFF) // Pure white cards
+val OnSurfaceLight = Color(0xFF1E1E1E)
 
-// Surface Container Variants (M3 Tinting)
+// Surface Container Variants (M3)
 val SurfaceContainerLowestLight = Color(0xFFFFFFFF)
-val SurfaceContainerLowLight = Color(0xFFF4F7F5)
-val SurfaceContainerLight = Color(0xFFEDF1EF)
-val SurfaceContainerHighLight = Color(0xFFE7EBE9)
-val SurfaceContainerHighestLight = Color(0xFFE1E5E3)
+val SurfaceContainerLowLight = Color(0xFFF8F9FA)
+val SurfaceContainerLight = Color(0xFFF3F4F6) // Very light gray for nested elements
+val SurfaceContainerHighLight = Color(0xFFE5E7EB)
+val SurfaceContainerHighestLight = Color(0xFFD1D5DB)
 
 // Surface Variants & Outlines
-val SurfaceVariantLight = Color(0xFFDBE5E0)
-val OnSurfaceVariantLight = Color(0xFF3F4946)
-val OutlineLight = Color(0xFF6F7976)
-val OutlineVariantLight = Color(0xFFBFC9C5)
+val SurfaceVariantLight = Color(0xFFF3F4F6)
+val OnSurfaceVariantLight = Color(0xFF4B5563) // Gray text for subtitles
+val OutlineLight = Color(0xFF9CA3AF)
+val OutlineVariantLight = Color(0xFFE5E7EB)
 
 // ----------------------------------------------------
 // DARK MODE PALETTE
 // ----------------------------------------------------
 
-val PrimaryDark = Color(0xFF56DBC0)
-val OnPrimaryDark = Color(0xFF00382E)
-val PrimaryContainerDark = Color(0xFF005144)
-val OnPrimaryContainerDark = Color(0xFF75F8DC)
+val PrimaryDark = Color(0xFF84C236)
+val OnPrimaryDark = Color(0xFF1D2D0C)
+val PrimaryContainerDark = Color(0xFF2D4710)
+val OnPrimaryContainerDark = Color(0xFFE2F5D6)
 
-val SecondaryDark = Color(0xFFB1CCC4)
-val OnSecondaryDark = Color(0xFF1D3530)
-val SecondaryContainerDark = Color(0xFF334B46)
-val OnSecondaryContainerDark = Color(0xFFCCE8E0)
+val SecondaryDark = Color(0xFFA3CD72)
+val OnSecondaryDark = Color(0xFF1D2D0C)
+val SecondaryContainerDark = Color(0xFF33691E)
+val OnSecondaryContainerDark = Color(0xFFF1F8E9)
 
-val TertiaryDark = Color(0xFFFFB872)
-val OnTertiaryDark = Color(0xFF4A2800)
-val TertiaryContainerDark = Color(0xFF693C00)
-val OnTertiaryContainerDark = Color(0xFFFFDCBE)
+val TertiaryDark = Color(0xFFFFB74D)
+val OnTertiaryDark = Color(0xFF4E342E)
+val TertiaryContainerDark = Color(0xFFF57C00)
+val OnTertiaryContainerDark = Color(0xFFFFE0B2)
 
-val ErrorDark = Color(0xFFFFB4AB)
-val OnErrorDark = Color(0xFF690005)
-val ErrorContainerDark = Color(0xFF93000A)
-val OnErrorContainerDark = Color(0xFFFFDAD6)
+val ErrorDark = Color(0xFFEF5350)
+val OnErrorDark = Color(0xFFB71C1C)
+val ErrorContainerDark = Color(0xFFC62828)
+val OnErrorContainerDark = Color(0xFFFFCDD2)
 
-val BackgroundDark = Color(0xFF111413) // Deeper background for dark mode
-val OnBackgroundDark = Color(0xFFE0E3E1)
-val SurfaceDark = Color(0xFF111413)
-val OnSurfaceDark = Color(0xFFE0E3E1)
+val BackgroundDark = Color(0xFF121212)
+val OnBackgroundDark = Color(0xFFE0E0E0)
+val SurfaceDark = Color(0xFF1E1E1E)
+val OnSurfaceDark = Color(0xFFE0E0E0)
 
 // Surface Container Variants Dark (M3 Tinting)
-val SurfaceContainerLowestDark = Color(0xFF0C0F0E)
-val SurfaceContainerLowDark = Color(0xFF191C1B)
-val SurfaceContainerDark = Color(0xFF1D201F)
-val SurfaceContainerHighDark = Color(0xFF282B2A)
-val SurfaceContainerHighestDark = Color(0xFF333635)
+val SurfaceContainerLowestDark = Color(0xFF121212)
+val SurfaceContainerLowDark = Color(0xFF181818)
+val SurfaceContainerDark = Color(0xFF1E1E1E)
+val SurfaceContainerHighDark = Color(0xFF242424)
+val SurfaceContainerHighestDark = Color(0xFF2C2C2C)
 
-val SurfaceVariantDark = Color(0xFF3F4946)
-val OnSurfaceVariantDark = Color(0xFFBFC9C5)
-val OutlineDark = Color(0xFF89938F)
-val OutlineVariantDark = Color(0xFF3F4946)
+val SurfaceVariantDark = Color(0xFF333333)
+val OnSurfaceVariantDark = Color(0xFFB0B0B0)
+val OutlineDark = Color(0xFF757575)
+val OutlineVariantDark = Color(0xFF424242)
 
 // Custom specific semantics
-val PositiveAmount = Color(0xFF0F9D58) // Green for getting money back
-val NegativeAmount = Color(0xFFDB4437) // Red for owing money
-val PositiveAmountDark = Color(0xFF5EE093) 
-val NegativeAmountDark = Color(0xFFFF897D)
+val PositiveAmount = Color(0xFF84C236) // Fresh Green for getting money back
+val NegativeAmount = Color(0xFFE53935) // Red for owing money
+val PositiveAmountDark = Color(0xFF84C236) 
+val NegativeAmountDark = Color(0xFFEF5350)
 
 // ----------------------------------------------------
-// GRADIENT & BADGE COLORS (UI/UX OVERHAUL)
+// BADGE COLORS (SOLID, FRESH UI)
 // ----------------------------------------------------
-
-// Gradients
-val GradientOceanStart = Color(0xFF00B4D8)
-val GradientOceanEnd = Color(0xFF7C3AED)
-val GradientSunsetStart = Color(0xFFF97316)
-val GradientSunsetEnd = Color(0xFFEC4899)
-val GradientAuroraStart = Color(0xFF6366F1)
-val GradientAuroraMid = Color(0xFF3B82F6)
-val GradientAuroraEnd = Color(0xFF06B6D4)
-val GradientForestStart = Color(0xFF10B981)
-val GradientForestEnd = Color(0xFF3B82F6)
-val GradientRoseStart = Color(0xFFF43F5E)
-val GradientRoseEnd = Color(0xFFA855F7)
 
 // Icon Badge Colors
-val BadgeGroupBg = Color(0xFFE0F2FE)
-val BadgeGroupIcon = Color(0xFF0369A1)
-val BadgeBillBg = Color(0xFFFFEDD5)
-val BadgeBillIcon = Color(0xFFC2410C)
-val BadgeStatsBg = Color(0xFFF3E8FF)
-val BadgeStatsIcon = Color(0xFF7E22CE)
-val BadgeMemberBg = Color(0xFFD1FAE5)
-val BadgeMemberIcon = Color(0xFF047857)
+val BadgeGroupBg = Color(0xFFE2F5D6)
+val BadgeGroupIcon = Color(0xFF2D4710)
+val BadgeBillBg = Color(0xFFFFE0B2)
+val BadgeBillIcon = Color(0xFFE65100)
+val BadgeStatsBg = Color(0xFFE0F7FA)
+val BadgeStatsIcon = Color(0xFF006064)
+val BadgeMemberBg = Color(0xFFF3F4F6)
+val BadgeMemberIcon = Color(0xFF4B5563)
 
 // Dark Mode Icon Badge Colors
-val BadgeGroupBgDark = Color(0xFF0C4A6E)
-val BadgeGroupIconDark = Color(0xFF7DD3FC)
-val BadgeBillBgDark = Color(0xFF7C2D12)
-val BadgeBillIconDark = Color(0xFFFDBA74)
-val BadgeStatsBgDark = Color(0xFF581C87)
-val BadgeStatsIconDark = Color(0xFFD8B4FE)
-val BadgeMemberBgDark = Color(0xFF064E3B)
-val BadgeMemberIconDark = Color(0xFF6EE7B7)
+val BadgeGroupBgDark = Color(0xFF2D4710)
+val BadgeGroupIconDark = Color(0xFFE2F5D6)
+val BadgeBillBgDark = Color(0xFFE65100)
+val BadgeBillIconDark = Color(0xFFFFE0B2)
+val BadgeStatsBgDark = Color(0xFF006064)
+val BadgeStatsIconDark = Color(0xFFE0F7FA)
+val BadgeMemberBgDark = Color(0xFF4B5563)
+val BadgeMemberIconDark = Color(0xFFF3F4F6)

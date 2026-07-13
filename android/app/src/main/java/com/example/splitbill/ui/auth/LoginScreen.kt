@@ -134,6 +134,10 @@ fun LoginScreen(
   val screenWidth = LocalConfiguration.current.screenWidthDp.dp
   val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
+  val primaryColor = MaterialTheme.colorScheme.primary
+  val secondaryColor = MaterialTheme.colorScheme.secondary
+  val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer
+
   Box(
     modifier = modifier
       .fillMaxSize()
@@ -154,7 +158,7 @@ fun LoginScreen(
       val orb1Y = cy + sin(angle1) * (cy * 0.4f)
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(Color(0xFF6750A4), Color.Transparent),
+          colors = listOf(primaryColor, Color.Transparent),
           center = Offset(orb1X, orb1Y),
           radius = size.width * 0.45f
         ),
@@ -162,12 +166,12 @@ fun LoginScreen(
         center = Offset(orb1X, orb1Y)
       )
 
-      // Orb 2: Secondary / Teal color
+      // Orb 2: Secondary color
       val orb2X = cx + cos(angle2 + Math.PI.toFloat()) * (cx * 0.6f)
       val orb2Y = cy + sin(angle2) * (cy * 0.3f)
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(Color(0xFF03DAC5), Color.Transparent),
+          colors = listOf(secondaryColor, Color.Transparent),
           center = Offset(orb2X, orb2Y),
           radius = size.width * 0.4f
         ),
@@ -175,12 +179,12 @@ fun LoginScreen(
         center = Offset(orb2X, orb2Y)
       )
 
-      // Orb 3: Accent Warm Orange color for richness
+      // Orb 3: Accent Green/Yellow Container color
       val orb3X = cx + sin(angle1) * (cx * 0.4f)
       val orb3Y = cy + cos(angle2) * (cy * 0.5f)
       drawCircle(
         brush = Brush.radialGradient(
-          colors = listOf(Color(0xFFFFB74D), Color.Transparent),
+          colors = listOf(primaryContainerColor, Color.Transparent),
           center = Offset(orb3X, orb3Y),
           radius = size.width * 0.35f
         ),

@@ -12,6 +12,8 @@ object Dimens {
   val SpacingXL = 32.dp
   val SpacingXXL = 48.dp
   val SpacingXXXL = 64.dp
+  
+  val BentoGap = 12.dp
 
   // Elevation
   val ElevationLevel0 = 0.dp

@@ -40,7 +40,8 @@ fun SettingsScreen(
   onNavigateToProfile: () -> Unit,
   onLogoutSuccess: () -> Unit,
   onNavigateBack: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  isTab: Boolean = false
 ) {
   val profileState by viewModel.profileUiState.collectAsStateWithLifecycle()
   val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -57,10 +58,11 @@ fun SettingsScreen(
   }
 
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
         title = "Cài đặt".localized(),
-        canNavigateBack = true,
+        canNavigateBack = !isTab,
         onNavigateBack = onNavigateBack
       )
     },
@@ -343,9 +345,7 @@ fun SettingsScreen(
                   modifier = Modifier
                     .size(40.dp)
                     .background(
-                      brush = Brush.linearGradient(
-                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                      ),
+                      color = MaterialTheme.colorScheme.primaryContainer,
                       shape = SplitBillShapes.medium
                     ),
                   contentAlignment = Alignment.Center
@@ -353,7 +353,7 @@ fun SettingsScreen(
                   Icon(
                     imageVector = Icons.Default.QrCode2,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(24.dp)
                   )
                 }
@@ -438,9 +438,7 @@ fun SettingsScreen(
             modifier = Modifier
               .fillMaxWidth()
               .height(Dimens.ButtonHeight),
-            gradient = Brush.horizontalGradient(
-              listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
-            ),
+            gradient = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error),
             shadowColor = MaterialTheme.colorScheme.error,
             shape = SplitBillShapes.medium
           ) {

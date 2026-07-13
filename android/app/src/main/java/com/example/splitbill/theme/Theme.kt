@@ -122,7 +122,7 @@ val LocalSplitBillCustomColors = staticCompositionLocalOf {
 @Composable
 fun SplitBillTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = true, // Dynamic color is available on Android 12+
+  dynamicColor: Boolean = false, // Changed default to false to force our custom Fresh Green palette
   content: @Composable () -> Unit
 ) {
   val context = LocalContext.current
