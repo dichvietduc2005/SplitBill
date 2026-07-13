@@ -30,10 +30,22 @@ import com.example.splitbill.ui.profile.ProfileScreen
 import com.example.splitbill.ui.profile.ProfileViewModel
 import com.example.splitbill.ui.settings.SettingsScreen
 import com.example.splitbill.ui.settings.SettingsViewModel
+import com.example.splitbill.ui.components.HomeTab
+import com.example.splitbill.ui.components.FloatingBottomBar
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 
 @Serializable data object Login : NavKey
-@Serializable data object GroupList : NavKey
+@Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Groups) : NavKey
 @Serializable data class GroupDetail(val groupId: String) : NavKey
 @Serializable data class AddBill(val groupId: String, val memberIds: List<String>, val memberNames: List<String>, val memberEmails: List<String>) : NavKey
 @Serializable data class DebtSummary(val groupId: String) : NavKey
@@ -61,21 +73,25 @@ fun MainNavigation(settingsManager: SettingsManager) {
           viewModel = viewModel,
           onLoginSuccess = {
             backStack.removeLastOrNull()
-            backStack.add(GroupList)
+            backStack.add(HomeTabs(HomeTab.Groups))
           }
         )
       }
 
-      entry<GroupList> {
-        val groupRepository = GroupRepository(tokenManager)
-        val viewModel = viewModel { GroupListViewModel(groupRepository) }
-        GroupListScreen(
-          viewModel = viewModel,
+      entry<HomeTabs> { key ->
+        HomeTabsScreen(
+          initialTab = key.initialTab,
+          settingsManager = settingsManager,
+          tokenManager = tokenManager,
           onNavigateToGroup = { groupId ->
             backStack.add(GroupDetail(groupId))
           },
-          onNavigateToSettings = {
-            backStack.add(Settings)
+          onNavigateToProfile = {
+            backStack.add(Profile)
+          },
+          onLogoutSuccess = {
+            backStack.clear()
+            backStack.add(Login)
           }
         )
       }
@@ -171,4 +187,79 @@ fun MainNavigation(settingsManager: SettingsManager) {
       }
     }
   )
+}
+
+@Composable
+fun HomeTabsScreen(
+  initialTab: HomeTab,
+  settingsManager: SettingsManager,
+  tokenManager: TokenManager,
+  onNavigateToGroup: (String) -> Unit,
+  onNavigateToProfile: () -> Unit,
+  onLogoutSuccess: () -> Unit
+) {
+  var currentTab by remember { mutableStateOf(initialTab) }
+
+  // Xử lý nút Back hệ thống: Nếu ở Tab Profile/Settings thì quay về Tab Groups trước khi thoát
+  androidx.activity.compose.BackHandler(enabled = currentTab != HomeTab.Groups) {
+    currentTab = HomeTab.Groups
+  }
+
+  Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+    bottomBar = {
+      FloatingBottomBar(
+        selectedTab = currentTab,
+        onTabSelected = { currentTab = it }
+      )
+    },
+    modifier = Modifier.fillMaxSize()
+  ) { paddingValues ->
+    Crossfade(
+      targetState = currentTab,
+      animationSpec = androidx.compose.animation.core.tween(200),
+      label = "tab_transition",
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(bottom = paddingValues.calculateBottomPadding() - 16.dp)
+    ) { tab ->
+      when (tab) {
+        HomeTab.Groups -> {
+          val groupRepository = GroupRepository(tokenManager)
+          val viewModel = viewModel { GroupListViewModel(groupRepository) }
+          GroupListScreen(
+            viewModel = viewModel,
+            onNavigateToGroup = onNavigateToGroup,
+            onNavigateToSettings = {},
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+        HomeTab.Profile -> {
+          val profileRepository = ProfileRepository(tokenManager)
+          val viewModel = viewModel { ProfileViewModel(profileRepository) }
+          ProfileScreen(
+            viewModel = viewModel,
+            onNavigateBack = {},
+            isTab = true,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+        HomeTab.Settings -> {
+          val authRepository = AuthRepository(tokenManager)
+          val profileRepository = ProfileRepository(tokenManager)
+          val viewModel = viewModel {
+            SettingsViewModel(settingsManager, authRepository, profileRepository)
+          }
+          SettingsScreen(
+            viewModel = viewModel,
+            onNavigateToProfile = onNavigateToProfile,
+            onLogoutSuccess = onLogoutSuccess,
+            onNavigateBack = {},
+            isTab = true,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+      }
+    }
+  }
 }
