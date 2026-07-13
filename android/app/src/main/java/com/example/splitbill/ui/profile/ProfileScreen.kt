@@ -27,6 +27,10 @@ import com.example.splitbill.ui.components.LoadingState
 import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
 
+import com.example.splitbill.theme.Motion
+
+import com.example.splitbill.ui.components.ProfileSkeleton
+
 // Danh sách ngân hàng Việt Nam phổ biến
 val VIETNAMESE_BANKS = listOf(
   "ACB" to "ACB - Á Châu",
@@ -59,7 +63,8 @@ val VIETNAMESE_BANKS = listOf(
 fun ProfileScreen(
   viewModel: ProfileViewModel,
   onNavigateBack: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  isTab: Boolean = false
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val saveState by viewModel.saveState.collectAsStateWithLifecycle()
@@ -94,10 +99,11 @@ fun ProfileScreen(
   }
 
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
         title = "Thông tin thanh toán",
-        canNavigateBack = true,
+        canNavigateBack = !isTab,
         onNavigateBack = onNavigateBack
       )
     },
@@ -105,9 +111,8 @@ fun ProfileScreen(
   ) { paddingValues ->
     when (val state = uiState) {
       is ProfileUiState.Loading -> {
-        LoadingState(
-          modifier = Modifier.padding(paddingValues).fillMaxSize(),
-          message = "Đang tải thông tin..."
+        ProfileSkeleton(
+          modifier = Modifier.padding(paddingValues).fillMaxSize()
         )
       }
       is ProfileUiState.Error -> {
@@ -123,34 +128,41 @@ fun ProfileScreen(
         ) {
           // Header card - thông tin user
           item {
-            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar
-                Surface(
-                  shape = MaterialTheme.shapes.medium,
-                  color = MaterialTheme.colorScheme.primaryContainer,
-                  modifier = Modifier.size(56.dp)
-                ) {
-                  Box(contentAlignment = Alignment.Center) {
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { visible = true }
+            AnimatedVisibility(
+              visible = visible,
+              enter = Motion.staggeredSlideIn(0)
+            ) {
+              SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  // Avatar
+                  Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(56.dp)
+                  ) {
+                    Box(contentAlignment = Alignment.Center) {
+                      Text(
+                        state.profile.username.first().uppercaseChar().toString(),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                      )
+                    }
+                  }
+                  Spacer(Modifier.width(Dimens.SpacingM))
+                  Column {
                     Text(
-                      state.profile.username.first().uppercaseChar().toString(),
-                      style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                      state.profile.username,
+                      style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                      state.profile.email,
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                   }
-                }
-                Spacer(Modifier.width(Dimens.SpacingM))
-                Column {
-                  Text(
-                    state.profile.username,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                  )
-                  Text(
-                    state.profile.email,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                  )
                 }
               }
             }
@@ -158,190 +170,208 @@ fun ProfileScreen(
 
           // VietQR info card
           item {
-            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-              Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Box(
-                    modifier = Modifier
-                      .size(32.dp)
-                      .background(
-                        brush = Brush.linearGradient(
-                          listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                          )
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { visible = true }
+            AnimatedVisibility(
+              visible = visible,
+              enter = Motion.staggeredSlideIn(1)
+            ) {
+              SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                      modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                          color = MaterialTheme.colorScheme.primaryContainer,
+                          shape = MaterialTheme.shapes.small
                         ),
-                        shape = MaterialTheme.shapes.small
-                      ),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Icon(
-                      Icons.Default.QrCode2,
-                      contentDescription = null,
-                      tint = MaterialTheme.colorScheme.onPrimary,
-                      modifier = Modifier.size(20.dp)
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Icon(
+                        Icons.Default.QrCode2,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                      )
+                    }
+                    Spacer(Modifier.width(Dimens.SpacingS))
+                    Text(
+                      "Thiết lập VietQR",
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onSurface
                     )
                   }
-                  Spacer(Modifier.width(Dimens.SpacingS))
+                  Spacer(Modifier.height(Dimens.SpacingS))
                   Text(
-                    "Thiết lập VietQR",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    "Bạn bè sẽ quét mã QR này khi muốn chuyển khoản trả nợ cho bạn.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                   )
                 }
-                Spacer(Modifier.height(Dimens.SpacingS))
-                Text(
-                  "Bạn bè sẽ quét mã QR này khi muốn chuyển khoản trả nợ cho bạn.",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
               }
             }
           }
 
           // Form ngân hàng
           item {
-            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-              Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)) {
-                Text(
-                  "Thông tin ngân hàng",
-                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                  color = MaterialTheme.colorScheme.onSurface
-                )
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { visible = true }
+            AnimatedVisibility(
+              visible = visible,
+              enter = Motion.staggeredSlideIn(2)
+            ) {
+              SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)) {
+                  Text(
+                    "Thông tin ngân hàng",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                  )
 
-                // Nút chọn ngân hàng xịn xò có Icon
-                Card(
-                  onClick = { showBankSelection = true },
-                  modifier = Modifier.fillMaxWidth(),
-                  colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                  Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                  // Nút chọn ngân hàng xịn xò có Icon
+                  Card(
+                    onClick = { showBankSelection = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                   ) {
-                    if (bankCode.isNotEmpty()) {
-                      coil3.compose.AsyncImage(
-                        model = "https://api.vietqr.io/img/$bankCode.png",
-                        contentDescription = null,
-                        modifier = Modifier
-                          .size(36.dp)
-                          .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                          .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
-                        contentScale = ContentScale.Fit
-                      )
-                      Spacer(Modifier.width(Dimens.SpacingM))
-                      Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                          VIETNAMESE_BANKS.find { it.first == bankCode }?.second ?: bankCode,
-                          style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                          color = MaterialTheme.colorScheme.onSurface
+                    Row(
+                      modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      if (bankCode.isNotEmpty()) {
+                        coil3.compose.AsyncImage(
+                          model = "https://api.vietqr.io/img/$bankCode.png",
+                          contentDescription = null,
+                          modifier = Modifier
+                            .size(36.dp)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+                          contentScale = ContentScale.Fit
                         )
-                        Text(bankCode, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(Dimens.SpacingM))
+                        Column(modifier = Modifier.weight(1f)) {
+                          Text(
+                            VIETNAMESE_BANKS.find { it.first == bankCode }?.second ?: bankCode,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                          )
+                          Text(bankCode, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                      } else {
+                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(Dimens.SpacingM))
+                        Text(
+                          "Chọn Ngân Hàng",
+                          style = MaterialTheme.typography.bodyLarge,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          modifier = Modifier.weight(1f)
+                        )
                       }
-                    } else {
-                      Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                      Spacer(Modifier.width(Dimens.SpacingM))
-                      Text(
-                        "Chọn Ngân Hàng",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                      )
+                      Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                   }
-                }
-                
-                if (showBankSelection) {
-                  BankSelectionBottomSheet(
-                    onDismiss = { showBankSelection = false },
-                    onBankSelected = { bankCode = it }
+                  
+                  if (showBankSelection) {
+                    BankSelectionBottomSheet(
+                      onDismiss = { showBankSelection = false },
+                      onBankSelected = { bankCode = it }
+                    )
+                  }
+
+                  // Số tài khoản
+                  OutlinedTextField(
+                    value = accountNumber,
+                    onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
+                    label = { Text("Số tài khoản") },
+                    leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null) },
+                    placeholder = { Text("Nhập số tài khoản") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                  )
+
+                  // Tên chủ tài khoản
+                  OutlinedTextField(
+                    value = accountName,
+                    onValueChange = { accountName = it.uppercase() },
+                    label = { Text("Tên chủ tài khoản") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    placeholder = { Text("NGUYEN VAN A") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
                   )
                 }
-
-                // Số tài khoản
-                OutlinedTextField(
-                  value = accountNumber,
-                  onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
-                  label = { Text("Số tài khoản") },
-                  leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null) },
-                  placeholder = { Text("Nhập số tài khoản") },
-                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                  singleLine = true,
-                  modifier = Modifier.fillMaxWidth(),
-                  shape = MaterialTheme.shapes.medium
-                )
-
-                // Tên chủ tài khoản
-                OutlinedTextField(
-                  value = accountName,
-                  onValueChange = { accountName = it.uppercase() },
-                  label = { Text("Tên chủ tài khoản") },
-                  leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                  placeholder = { Text("NGUYEN VAN A") },
-                  keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                  singleLine = true,
-                  modifier = Modifier.fillMaxWidth(),
-                  shape = MaterialTheme.shapes.medium
-                )
               }
             }
           }
 
           // Nút lưu + thông báo thành công
           item {
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { visible = true }
             AnimatedVisibility(
-              visible = showSaveSuccess,
-              enter = fadeIn() + slideInVertically(),
-              exit = fadeOut()
+              visible = visible,
+              enter = Motion.staggeredSlideIn(3)
             ) {
-              Card(
-                colors = CardDefaults.cardColors(
-                  containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Row(
-                  modifier = Modifier.padding(Dimens.SpacingM),
-                  verticalAlignment = Alignment.CenterVertically
+              Column(modifier = Modifier.fillMaxWidth()) {
+                AnimatedVisibility(
+                  visible = showSaveSuccess,
+                  enter = fadeIn() + slideInVertically(),
+                  exit = fadeOut()
                 ) {
-                  Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                  )
+                  Card(
+                    colors = CardDefaults.cardColors(
+                      containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(Dimens.SpacingM),
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                      )
+                      Spacer(Modifier.width(Dimens.SpacingS))
+                      Text(
+                        "Đã lưu thông tin ngân hàng thành công!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                      )
+                    }
+                  }
+                }
+
+                Spacer(Modifier.height(Dimens.SpacingS))
+
+                Button(
+                  onClick = {
+                    showSaveSuccess = false
+                    viewModel.saveBankInfo(bankCode, accountNumber, accountName)
+                  },
+                  enabled = bankCode.isNotBlank() && accountNumber.isNotBlank() && accountName.isNotBlank(),
+                  modifier = Modifier.fillMaxWidth().height(56.dp),
+                  shape = MaterialTheme.shapes.medium
+                ) {
+                  Icon(Icons.Default.Save, contentDescription = null)
                   Spacer(Modifier.width(Dimens.SpacingS))
                   Text(
-                    "Đã lưu thông tin ngân hàng thành công!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    "Lưu thông tin",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                   )
                 }
               }
             }
-
-            Spacer(Modifier.height(Dimens.SpacingS))
-
-            Button(
-              onClick = {
-                showSaveSuccess = false
-                viewModel.saveBankInfo(bankCode, accountNumber, accountName)
-              },
-              enabled = bankCode.isNotBlank() && accountNumber.isNotBlank() && accountName.isNotBlank(),
-              modifier = Modifier.fillMaxWidth().height(56.dp),
-              shape = MaterialTheme.shapes.medium
-            ) {
-              Icon(Icons.Default.Save, contentDescription = null)
-              Spacer(Modifier.width(Dimens.SpacingS))
-              Text(
-                "Lưu thông tin",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-              )
-            }
           }
 
-          item { Spacer(Modifier.height(Dimens.SpacingXL)) }
+          item { Spacer(Modifier.height(80.dp)) }
         }
       }
     }
