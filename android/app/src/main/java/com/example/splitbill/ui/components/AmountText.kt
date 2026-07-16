@@ -21,7 +21,8 @@ fun AmountText(
   amount: Double,
   modifier: Modifier = Modifier,
   style: TextStyle = LocalTextStyle.current,
-  isDebt: Boolean? = null // null means neutral (e.g., total bill amount)
+  isDebt: Boolean? = null, // null means neutral (e.g., total bill amount)
+  currency: String = "VND"
 ) {
   val animatedAmount by androidx.compose.animation.core.animateFloatAsState(
     targetValue = amount.toFloat(),
@@ -29,7 +30,17 @@ fun AmountText(
     label = "amount_counter"
   )
 
-  val formattedAmount = NumberFormat.getCurrencyInstance(Locale("vi", "VN")).format(animatedAmount.toDouble())
+  val formattedAmount = if (currency == "VND") {
+    NumberFormat.getCurrencyInstance(Locale("vi", "VN")).format(animatedAmount.toDouble())
+  } else {
+    try {
+      val format = NumberFormat.getCurrencyInstance(Locale.US)
+      format.currency = java.util.Currency.getInstance(currency)
+      format.format(animatedAmount.toDouble())
+    } catch (e: Exception) {
+      "${animatedAmount.toInt()} $currency"
+    }
+  }
   
   val textColor = when (isDebt) {
     true -> LocalSplitBillCustomColors.current.negativeAmount

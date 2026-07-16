@@ -23,8 +23,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -43,6 +45,12 @@ import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.localization.localized
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import com.example.splitbill.data.StatsRepository
+import com.example.splitbill.ui.stats.GroupStatsViewModel
+import com.example.splitbill.ui.stats.GroupStatsUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,11 +60,13 @@ fun GroupDetailScreen(
   onNavigateBack: () -> Unit,
   onAddBill: (groupId: String, members: List<MemberResponse>) -> Unit,
   onViewDebts: (groupId: String) -> Unit,
-  modifier: Modifier = Modifier
+  onViewStats: (groupId: String) -> Unit,
+  modifier: Modifier = Modifier,
+  onEditBill: (groupId: String, bill: BillResponse, members: List<MemberResponse>) -> Unit
 ) {
   val state by viewModel.state.collectAsStateWithLifecycle()
   var showAddMemberDialog by remember { mutableStateOf(false) }
-  var showStatsSheet by remember { mutableStateOf(false) }
+  var showInviteSheet by remember { mutableStateOf(false) }
   var showMembersSheet by remember { mutableStateOf(false) }
   var showGroupInfoDialog by remember { mutableStateOf(false) }
 
@@ -120,7 +130,7 @@ fun GroupDetailScreen(
             SpeedDialItem(
               icon = Icons.Rounded.GroupAdd,
               label = "Mời thành viên",
-              onClick = { showAddMemberDialog = true }
+              onClick = { showInviteSheet = true }
             )
           )
         )
@@ -178,7 +188,7 @@ fun GroupDetailScreen(
         item {
           ActionGrid(
             onSuggestSplit = { onViewDebts(state.group?.id ?: "") },
-            onStats = { showStatsSheet = true }
+            onStats = { onViewStats(state.group?.id ?: "") }
           )
         }
 
@@ -235,7 +245,11 @@ fun GroupDetailScreen(
               visible = visible,
               enter = Motion.staggeredSlideIn(index)
             ) {
-              BillCard(bill = bill, onDelete = { viewModel.deleteBill(bill.id) })
+              BillCard(
+                bill = bill, 
+                onDelete = { viewModel.deleteBill(bill.id) },
+                onEdit = { onEditBill(state.group?.id ?: "", bill, state.members) }
+              )
             }
           }
         }
@@ -246,15 +260,7 @@ fun GroupDetailScreen(
     }
   }
 
-  // --- Statistics Bottom Sheet ---
-  if (showStatsSheet) {
-    ModalBottomSheet(
-      onDismissRequest = { showStatsSheet = false },
-      containerColor = MaterialTheme.colorScheme.surface
-    ) {
-      StatisticsContent(state = state)
-    }
-  }
+
 
   // --- Members Bottom Sheet (Simplified view) ---
   if (showMembersSheet) {
@@ -287,39 +293,145 @@ fun GroupDetailScreen(
     }
   }
 
-  // --- Add Member PremiumDialog ---
-  if (showAddMemberDialog) {
-    var memberInput by remember { mutableStateOf("") }
-    PremiumDialog(
-      onDismissRequest = { showAddMemberDialog = false },
-      title = "Mời thành viên",
-      icon = Icons.Default.PersonAdd,
-      confirmButtonText = "Mời",
-      onConfirm = {
-        if (memberInput.isNotBlank()) {
-          viewModel.addMember(memberInput.trim())
-          showAddMemberDialog = false
-        }
+  // --- Invite Member BottomSheet ---
+  if (showInviteSheet) {
+    val invite by viewModel.activeInvite.collectAsStateWithLifecycle()
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    ModalBottomSheet(
+      onDismissRequest = {
+        showInviteSheet = false
+        viewModel.clearActiveInvite()
       },
-      dismissButtonText = "Hủy",
-      onDismiss = { showAddMemberDialog = false },
-      content = {
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(Dimens.SpacingL),
+        horizontalAlignment = Alignment.CenterHorizontally
+      ) {
         Text(
-          "Nhập username hoặc email của người bạn muốn mời vào nhóm:",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          "Mời thành viên vào nhóm",
+          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.height(Dimens.SpacingM))
+
+        // Cách 1: Mời trực tiếp bằng email/username
+        var memberInput by remember { mutableStateOf("") }
         OutlinedTextField(
           value = memberInput,
           onValueChange = { memberInput = it },
           label = { Text("Username hoặc Email") },
+          placeholder = { Text("nhan.nguyen@example.com") },
           modifier = Modifier.fillMaxWidth(),
           singleLine = true,
-          shape = RoundedCornerShape(12.dp)
+          shape = RoundedCornerShape(12.dp),
+          trailingIcon = {
+            IconButton(
+              onClick = {
+                if (memberInput.isNotBlank()) {
+                  viewModel.addMember(memberInput.trim())
+                  memberInput = ""
+                  showInviteSheet = false
+                }
+              }
+            ) {
+              Icon(Icons.Default.Send, contentDescription = "Gửi", tint = MaterialTheme.colorScheme.primary)
+            }
+          }
         )
+
+        Spacer(Modifier.height(Dimens.SpacingL))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(Dimens.SpacingL))
+
+        // Cách 2: Chia sẻ link mời
+        Text(
+          "Hoặc chia sẻ mã mời (Hạn 7 ngày)",
+          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        if (invite == null) {
+          Button(
+            onClick = { viewModel.loadOrCreateActiveInvite() },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = MaterialTheme.shapes.medium
+          ) {
+            Icon(Icons.Default.Link, contentDescription = null)
+            Spacer(Modifier.width(Dimens.SpacingS))
+            Text("Tạo liên kết mời 7 ngày", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+          }
+        } else {
+          // Hiển thị QR Code
+          Box(
+            modifier = Modifier
+              .size(160.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(Color.White)
+              .padding(8.dp),
+            contentAlignment = Alignment.Center
+          ) {
+            AsyncImage(
+              model = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${invite!!.inviteUrl}",
+              contentDescription = "QR Code mã mời",
+              modifier = Modifier.fillMaxSize()
+            )
+          }
+
+          Spacer(Modifier.height(Dimens.SpacingM))
+
+          // Hiển thị Link và Mã code
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(12.dp))
+              .background(MaterialTheme.colorScheme.surfaceVariant)
+              .padding(Dimens.SpacingM)
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                "Mã mời: ${invite!!.inviteCode}",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+              Text(
+                invite!!.inviteUrl,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1
+              )
+            }
+            IconButton(
+              onClick = {
+                clipboardManager.setText(AnnotatedString(invite!!.inviteUrl))
+              }
+            ) {
+              Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(
+              onClick = {
+                val sendIntent = android.content.Intent().apply {
+                  action = android.content.Intent.ACTION_SEND
+                  putExtra(android.content.Intent.EXTRA_TEXT, "Tham gia nhóm SplitBill '${state.group?.name}' cùng tôi nhé! Mã mời (hạn 7 ngày): ${invite!!.inviteCode}\nLiên kết: ${invite!!.inviteUrl}")
+                  type = "text/plain"
+                }
+                val shareIntent = android.content.Intent.createChooser(sendIntent, null)
+                context.startActivity(shareIntent)
+              }
+            ) {
+              Icon(Icons.Default.Share, contentDescription = "Chia sẻ", tint = MaterialTheme.colorScheme.primary)
+            }
+          }
+        }
+        Spacer(Modifier.height(Dimens.SpacingXL))
       }
-    )
+    }
   }
 
   // --- Group Info PremiumDialog ---
@@ -407,6 +519,8 @@ fun GroupDetailScreen(
       }
     )
   }
+
+
 }
 
 @Composable
@@ -656,66 +770,11 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
   }
 }
 
-@Composable
-private fun StatisticsContent(state: GroupDetailState) {
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(horizontal = Dimens.SpacingM, vertical = Dimens.SpacingS)
-  ) {
-    Text(
-      "Thống kê nhóm",
-      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-      color = MaterialTheme.colorScheme.onBackground
-    )
-    Spacer(Modifier.height(Dimens.SpacingM))
 
-    val totalSpent = state.bills.sumOf { it.totalAmount }
-    val avgPerBill = if (state.bills.isNotEmpty()) totalSpent / state.bills.size else 0.0
-    val avgPerMember = if (state.members.isNotEmpty()) totalSpent / state.members.size else 0.0
-    val biggestBill = state.bills.maxByOrNull { it.totalAmount }
-    
-    val payerTotals = state.bills.groupBy { it.paidByUsername }
-      .mapValues { (_, bills) -> bills.sumOf { it.totalAmount } }
-    val topPayer = payerTotals.maxByOrNull { it.value }
-
-    StatRow(label = "Trung bình/hóa đơn", amount = avgPerBill)
-    StatRow(label = "Trung bình/người", amount = avgPerMember)
-    if (biggestBill != null) {
-      Spacer(Modifier.height(Dimens.SpacingS))
-      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-      Spacer(Modifier.height(Dimens.SpacingS))
-      Text("Hóa đơn lớn nhất:", style = MaterialTheme.typography.labelMedium)
-      Text(biggestBill.description, style = MaterialTheme.typography.bodyMedium)
-      AmountText(amount = biggestBill.totalAmount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-    }
-    if (topPayer != null) {
-      Spacer(Modifier.height(Dimens.SpacingS))
-      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-      Spacer(Modifier.height(Dimens.SpacingS))
-      Text("Thanh toán nhiều nhất:", style = MaterialTheme.typography.labelMedium)
-      Text(topPayer.key, style = MaterialTheme.typography.bodyMedium)
-      AmountText(amount = topPayer.value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-    }
-    Spacer(Modifier.height(Dimens.SpacingL))
-  }
-}
-
-@Composable
-private fun StatRow(label: String, amount: Double) {
-  Row(
-    modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpacingXS),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    AmountText(amount = amount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-  }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
+private fun BillCard(bill: BillResponse, onDelete: () -> Unit, onEdit: () -> Unit) {
   var expanded by remember { mutableStateOf(false) }
   var showDeleteDialog by remember { mutableStateOf(false) }
   val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
@@ -802,7 +861,7 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
           )
         }
         Column(horizontalAlignment = Alignment.End) {
-          AmountText(amount = bill.totalAmount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+          AmountText(amount = bill.totalAmount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), currency = bill.currency)
         }
       }
 
@@ -815,12 +874,29 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
           Spacer(Modifier.height(Dimens.SpacingS))
           HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
           Spacer(Modifier.height(Dimens.SpacingS))
-          Text("Chi tiết chia tiền:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text("Chi tiết chia tiền:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(
+              onClick = onEdit,
+              modifier = Modifier.size(32.dp)
+            ) {
+              Icon(
+                Icons.Default.Edit,
+                contentDescription = "Sửa",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+              )
+            }
+          }
           Spacer(Modifier.height(Dimens.SpacingXS))
           bill.splits.forEach { split ->
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
               Text(split.username, style = MaterialTheme.typography.bodySmall)
-              AmountText(amount = split.amountOwed, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium))
+              AmountText(amount = split.amountOwed, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), currency = bill.currency)
             }
           }
         }
@@ -844,3 +920,5 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit) {
     )
   }
 }
+
+

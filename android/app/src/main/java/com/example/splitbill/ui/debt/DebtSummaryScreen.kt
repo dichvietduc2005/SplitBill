@@ -2,16 +2,20 @@ package com.example.splitbill.ui.debt
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,6 +28,7 @@ import com.example.splitbill.ui.components.EmptyState
 import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.components.VietQrBottomSheet
+import com.example.splitbill.ui.components.PremiumDialog
 
 @Composable
 fun DebtSummaryScreen(
@@ -37,7 +42,19 @@ fun DebtSummaryScreen(
   val creditorProfile by viewModel.creditorProfile.collectAsStateWithLifecycle()
   val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
 
-  Scaffold(
+  var showSettleConfirmDialog by remember { mutableStateOf<SimplifiedDebt?>(null) }
+  var settlementNote by remember { mutableStateOf("") }
+  var showSuccessOverlay by remember { mutableStateOf(false) }
+
+  LaunchedEffect(showSuccessOverlay) {
+    if (showSuccessOverlay) {
+      kotlinx.coroutines.delay(1500)
+      showSuccessOverlay = false
+    }
+  }
+
+  Box(modifier = modifier.fillMaxSize()) {
+    Scaffold(
     topBar = {
       SplitBillTopBar(
         title = "Tổng kết nợ",
@@ -218,7 +235,11 @@ fun DebtSummaryScreen(
                 DebtCard(
                   debt = debt,
                   currentUserId = currentUserId,
-                  onPayClick = { viewModel.selectDebtForPayment(debt) }
+                  onPayClick = { viewModel.selectDebtForPayment(debt) },
+                  onSettleClick = {
+                    showSettleConfirmDialog = debt
+                    settlementNote = ""
+                  }
                 )
               }
             }
@@ -241,10 +262,104 @@ fun DebtSummaryScreen(
       onDismiss = { viewModel.dismissQrSheet() }
     )
   }
+
+  // Confirm Settle Dialog
+  if (showSettleConfirmDialog != null) {
+    val debt = showSettleConfirmDialog!!
+    PremiumDialog(
+      onDismissRequest = { showSettleConfirmDialog = null },
+      title = "Xác nhận trả nợ",
+      icon = Icons.Default.CheckCircle,
+      confirmButtonText = "Xác nhận",
+      onConfirm = {
+        viewModel.settleDebt(
+          toUserId = debt.toUserId,
+          amount = debt.amount,
+          note = settlementNote.trim().ifBlank { null }
+        ) {
+          showSuccessOverlay = true
+        }
+        showSettleConfirmDialog = null
+      },
+      dismissButtonText = "Hủy",
+      onDismiss = { showSettleConfirmDialog = null },
+      content = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Text(
+            text = "Xác nhận bạn (${debt.fromUsername}) đã trả số tiền:",
+            style = MaterialTheme.typography.bodyMedium
+          )
+          Spacer(Modifier.height(Dimens.SpacingS))
+          AmountText(
+            amount = debt.amount,
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            isDebt = null
+          )
+          Spacer(Modifier.height(Dimens.SpacingS))
+          Text(
+            text = "Cho ${debt.toUsername}.",
+            style = MaterialTheme.typography.bodyMedium
+          )
+          Spacer(Modifier.height(Dimens.SpacingM))
+          OutlinedTextField(
+            value = settlementNote,
+            onValueChange = { settlementNote = it },
+            label = { Text("Ghi chú (ví dụ: Chuyển khoản, tiền mặt...)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+          )
+        }
+      }
+    )
+  }
+
+  // Success Confetti Overlay
+  AnimatedVisibility(
+    visible = showSuccessOverlay,
+    enter = fadeIn(animationSpec = tween(300)),
+    exit = fadeOut(),
+    modifier = Modifier.fillMaxSize()
+  ) {
+    Box(
+      modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+      contentAlignment = Alignment.Center
+    ) {
+      com.example.splitbill.ui.components.ConfettiOverlay()
+
+      val scale = remember { Animatable(0f) }
+      LaunchedEffect(Unit) {
+        scale.animateTo(
+          targetValue = 1f,
+          animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+          )
+        )
+      }
+      Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.size(140.dp).scale(scale.value),
+        shadowElevation = 8.dp
+      ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+          Icon(
+            Icons.Default.CheckCircle,
+            contentDescription = "Success",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(80.dp)
+          )
+        }
+      }
+    }
+  }
+  }
 }
 
 @Composable
-private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: () -> Unit) {
+private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: () -> Unit, onSettleClick: () -> Unit) {
   val isCreditor = debt.toUserId == currentUserId
 
   SplitBillCard(modifier = Modifier.fillMaxWidth()) {
@@ -294,21 +409,44 @@ private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: ()
       HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
       Spacer(Modifier.height(Dimens.SpacingS))
 
-      // Nút thanh toán QR
-      Button(
-        onClick = onPayClick,
-        modifier = Modifier.fillMaxWidth().height(44.dp),
-        shape = MaterialTheme.shapes.medium,
-        colors = ButtonDefaults.buttonColors(
-          containerColor = MaterialTheme.colorScheme.primary
-        )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
       ) {
-        Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(Dimens.SpacingXS))
-        Text(
-          if (isCreditor) "Mã nhận tiền VietQR" else "Thanh toán VietQR",
-          style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-        )
+        // Nút QR Code
+        Button(
+          onClick = onPayClick,
+          modifier = Modifier.weight(1f).height(44.dp),
+          shape = MaterialTheme.shapes.medium,
+          colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+          )
+        ) {
+          Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(Dimens.SpacingXS))
+          Text(
+            if (isCreditor) "Mã nhận QR" else "Quét mã QR",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+          )
+        }
+
+        // Nút Đã trả xong
+        Button(
+          onClick = onSettleClick,
+          modifier = Modifier.weight(1f).height(44.dp),
+          shape = MaterialTheme.shapes.medium,
+          colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary
+          )
+        ) {
+          Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(Dimens.SpacingXS))
+          Text(
+            "Đã trả xong",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+          )
+        }
       }
     }
   }

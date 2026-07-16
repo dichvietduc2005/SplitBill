@@ -42,28 +42,45 @@ object DebtSimplifier {
      *
      * @param bills      Tất cả hóa đơn trong nhóm
      * @param allSplits  Tất cả chi tiết chia nợ tương ứng
+     * @param settlements Danh sách các thanh toán nợ đã thực hiện
      * @param memberMap  Map<userId, username> cho tra cứu tên
      * @return           Danh sách các giao dịch tối giản
      */
     fun simplify(
         bills: List<Bill>,
         allSplits: List<BillSplit>,
+        settlements: List<Settlement>,
         memberMap: Map<String, String>
     ): List<SimplifiedDebt> {
 
-        // Bước 1: Tính net balance cho mỗi người
+        // Bước 1: Tính net balance cho mỗi người (quy đổi ra VND)
         val balanceMap = mutableMapOf<String, Double>()
-
-        // Với mỗi hóa đơn, người trả tiền (paidByUserId) ĐƯỢC cộng totalAmount
+ 
+        // Với mỗi hóa đơn, người trả tiền (paidByUserId) ĐƯỢC cộng totalAmount * exchangeRate
         for (bill in bills) {
+            val rate = bill.exchangeRate.toDouble()
+            val amountInVND = bill.totalAmount.toDouble() * rate
             balanceMap[bill.paidByUserId] =
-                (balanceMap[bill.paidByUserId] ?: 0.0) + bill.totalAmount.toDouble()
+                (balanceMap[bill.paidByUserId] ?: 0.0) + amountInVND
+        }
+ 
+        // Với mỗi split, người nợ (userId) BỊ trừ amountOwed * bill.exchangeRate
+        for (split in allSplits) {
+            val bill = bills.find { it.id == split.billId }
+            val rate = bill?.exchangeRate?.toDouble() ?: 1.0
+            val amountInVND = split.amountOwed.toDouble() * rate
+            balanceMap[split.userId] =
+                (balanceMap[split.userId] ?: 0.0) - amountInVND
         }
 
-        // Với mỗi split, người nợ (userId) BỊ trừ amountOwed
-        for (split in allSplits) {
-            balanceMap[split.userId] =
-                (balanceMap[split.userId] ?: 0.0) - split.amountOwed.toDouble()
+        // Với mỗi settlement, trừ nợ cho cả hai bên
+        for (settlement in settlements) {
+            // Con nợ trả tiền -> nợ giảm -> balance tăng lên (dương hơn)
+            balanceMap[settlement.fromUserId] =
+                (balanceMap[settlement.fromUserId] ?: 0.0) + settlement.amount.toDouble()
+            // Chủ nợ nhận tiền -> được nợ giảm -> balance giảm đi (âm hơn)
+            balanceMap[settlement.toUserId] =
+                (balanceMap[settlement.toUserId] ?: 0.0) - settlement.amount.toDouble()
         }
 
         // Bước 2: Phân chia thành chủ nợ và con nợ

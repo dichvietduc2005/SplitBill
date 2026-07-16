@@ -260,7 +260,15 @@ fun GroupListScreen(
       confirmButtonText = "Tham gia".localized(),
       onConfirm = {
         if (groupIdInput.isNotBlank()) {
-          viewModel.joinGroup(groupIdInput.trim())
+          val input = groupIdInput.trim()
+          if (input.startsWith("splitbill://join/")) {
+            val code = input.substringAfter("splitbill://join/")
+            viewModel.joinByInvite(code)
+          } else if (input.length == 8) {
+            viewModel.joinByInvite(input)
+          } else {
+            viewModel.joinGroup(input)
+          }
           showJoinDialog = false
         }
       },
@@ -268,7 +276,7 @@ fun GroupListScreen(
       onDismiss = { showJoinDialog = false },
       content = {
         Text(
-          "Nhập mã ID của nhóm để tham gia:",
+          "Nhập mã ID nhóm hoặc Mã/Liên kết mời để tham gia:",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -276,7 +284,8 @@ fun GroupListScreen(
         OutlinedTextField(
           value = groupIdInput,
           onValueChange = { groupIdInput = it },
-          label = { Text("Mã ID nhóm") },
+          label = { Text("ID nhóm, mã mời hoặc link mời") },
+          placeholder = { Text("VD: x1Y2z3A4 hoặc UUID...") },
           modifier = Modifier.fillMaxWidth(),
           singleLine = true,
           shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)

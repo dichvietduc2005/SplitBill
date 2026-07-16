@@ -45,7 +45,9 @@ object DatabaseFactory {
                 Groups,
                 GroupMembers,
                 Bills,
-                BillSplits
+                BillSplits,
+                Settlements,
+                GroupInvites
             )
         }
     }
@@ -129,6 +131,8 @@ object Bills : Table("bills") {
     val description = varchar("description", 255)
     val totalAmount = decimal("total_amount", 15, 2) // Lên tới 999 tỷ đồng, 2 chữ số thập phân
     val paidByUserId = reference("paid_by_user_id", Users.id)
+    val currency = varchar("currency", 3).default("VND")
+    val exchangeRate = decimal("exchange_rate", 15, 6).default(java.math.BigDecimal.ONE)
     val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
@@ -141,4 +145,31 @@ object BillSplits : Table("bill_splits") {
     val amountOwed = decimal("amount_owed", 15, 2)
 
     override val primaryKey = PrimaryKey(billId, userId)
+}
+
+// 6. Bảng lưu trữ thanh toán nợ (Settlements)
+object Settlements : Table("settlements") {
+    val id = uuid("id").autoGenerate()
+    val groupId = reference("group_id", Groups.id)
+    val fromUserId = reference("from_user_id", Users.id) // Người trả nợ
+    val toUserId = reference("to_user_id", Users.id)     // Người nhận tiền
+    val amount = decimal("amount", 15, 2)
+    val note = varchar("note", 255).nullable()
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+// 7. Bảng lưu trữ mã mời tham gia nhóm (GroupInvites)
+object GroupInvites : Table("group_invites") {
+    val id = uuid("id").autoGenerate()
+    val groupId = reference("group_id", Groups.id)
+    val inviteCode = varchar("invite_code", 12).uniqueIndex() // Mã mời ví dụ: "aBc12X"
+    val createdBy = reference("created_by", Users.id)
+    val expiresAt = datetime("expires_at")                    // Hạn 7 ngày
+    val maxUses = integer("max_uses").nullable()
+    val useCount = integer("use_count").default(0)
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
+
+    override val primaryKey = PrimaryKey(id)
 }

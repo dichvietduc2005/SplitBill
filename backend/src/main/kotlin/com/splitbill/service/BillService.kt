@@ -17,7 +17,8 @@ import com.splitbill.models.*
 class BillService(
     private val billRepository: BillRepository,
     private val groupRepository: GroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val settlementRepository: SettlementRepository
 ) {
 
     /**
@@ -47,6 +48,8 @@ class BillService(
             description = request.description,
             totalAmount = request.totalAmount,
             paidByUserId = request.paidByUserId,
+            currency = request.currency,
+            exchangeRate = request.exchangeRate,
             splits = splits
         ) ?: throw InternalException("Lỗi server khi tạo hóa đơn")
 
@@ -71,6 +74,44 @@ class BillService(
             limit = limit,
             offset = offset
         )
+    }
+
+    /**
+     * Cập nhật thông tin hóa đơn — kiểm tra quyền thành viên và validate splits.
+     */
+    suspend fun updateBill(billId: String, request: UpdateBillRequest, userId: String): BillResponse {
+        val existingBill = billRepository.getBillById(billId)
+            ?: throw NotFoundException("Không tìm thấy hóa đơn")
+
+        // Kiểm tra quyền: người thực hiện sửa phải là thành viên nhóm chứa bill
+        if (!groupRepository.isMember(existingBill.groupId, userId)) {
+            throw ForbiddenException("Bạn không có quyền sửa hóa đơn này")
+        }
+
+        // Kiểm tra người trả tiền cũng phải là thành viên nhóm
+        if (!groupRepository.isMember(existingBill.groupId, request.paidByUserId)) {
+            throw ValidationException("Người trả tiền không phải thành viên nhóm")
+        }
+
+        // Kiểm tra tất cả người trong splits đều là thành viên nhóm
+        for (split in request.splits) {
+            if (!groupRepository.isMember(existingBill.groupId, split.userId)) {
+                throw ValidationException("User ${split.userId} không phải thành viên nhóm")
+            }
+        }
+
+        val splits = request.splits.map { Pair(it.userId, it.amount) }
+        val updatedBill = billRepository.updateBill(
+            billId = billId,
+            description = request.description,
+            totalAmount = request.totalAmount,
+            paidByUserId = request.paidByUserId,
+            currency = request.currency,
+            exchangeRate = request.exchangeRate,
+            splits = splits
+        ) ?: throw InternalException("Lỗi server khi cập nhật hóa đơn")
+
+        return toBillResponse(updatedBill)
     }
 
     /**
@@ -105,6 +146,7 @@ class BillService(
 
         val bills = billRepository.getAllBillsForGroup(groupId)
         val allSplits = billRepository.getAllSplitsForGroup(groupId)
+        val settlements = settlementRepository.getSettlementsForGroup(groupId)
 
         if (bills.isEmpty()) {
             return DebtResponse(
@@ -118,7 +160,7 @@ class BillService(
         val members = groupRepository.getMembers(groupId)
         val memberMap = members.associate { it.userId to it.username }
 
-        val simplifiedDebts = DebtSimplifier.simplify(bills, allSplits, memberMap)
+        val simplifiedDebts = DebtSimplifier.simplify(bills, allSplits, settlements, memberMap)
 
         return DebtResponse(
             groupId = groupId,
@@ -150,6 +192,8 @@ class BillService(
             totalAmount = bill.totalAmount.toDouble(),
             paidByUserId = bill.paidByUserId,
             paidByUsername = paidByUser?.username ?: "Unknown",
+            currency = bill.currency,
+            exchangeRate = bill.exchangeRate.toDouble(),
             splits = splitResponses,
             createdAt = bill.createdAt
         )

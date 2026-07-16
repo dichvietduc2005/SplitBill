@@ -55,6 +55,8 @@ data class BillResponse(
   val totalAmount: Double,
   val paidByUserId: String,
   val paidByUsername: String,
+  val currency: String,
+  val exchangeRate: Double,
   val splits: List<BillSplitResponse>,
   val createdAt: String
 )
@@ -79,6 +81,8 @@ data class CreateBillRequest(
   val description: String,
   val totalAmount: Double,
   val paidByUserId: String,
+  val currency: String = "VND",
+  val exchangeRate: Double = 1.0,
   val splits: List<BillSplitItem>
 )
 
@@ -86,6 +90,16 @@ data class CreateBillRequest(
 data class BillSplitItem(
   val userId: String,
   val amount: Double
+)
+
+@Serializable
+data class UpdateBillRequest(
+  val description: String,
+  val totalAmount: Double,
+  val paidByUserId: String,
+  val currency: String = "VND",
+  val exchangeRate: Double = 1.0,
+  val splits: List<BillSplitItem>
 )
 
 // ==========================================
@@ -129,4 +143,98 @@ data class UpdateBankInfoRequest(
   val bankCode: String,
   val accountNumber: String,
   val accountName: String
+)
+
+// ==========================================
+// SETTLEMENT
+// ==========================================
+
+@Serializable
+data class CreateSettlementRequest(
+  val groupId: String,
+  val toUserId: String,
+  val amount: Double,
+  val note: String? = null
+)
+
+@Serializable
+data class SettlementResponse(
+  val id: String,
+  val groupId: String,
+  val fromUserId: String,
+  val fromUsername: String,
+  val toUserId: String,
+  val toUsername: String,
+  val amount: Double,
+  val note: String?,
+  val createdAt: String
+)
+
+// ==========================================
+// GROUP INVITES
+// ==========================================
+
+@Serializable
+data class CreateInviteRequest(
+  val maxUses: Int? = null
+)
+
+@Serializable
+data class InviteResponse(
+  val id: String,
+  val groupId: String,
+  val groupName: String,
+  val inviteCode: String,
+  val inviteUrl: String,
+  val expiresAt: String,
+  val maxUses: Int?,
+  val useCount: Int,
+  val createdAt: String
+)
+
+@Serializable
+data class JoinGroupWithCodeRequest(
+  val inviteCode: String
+)
+
+// ==========================================
+// STATS
+// ==========================================
+
+@Serializable
+data class GroupSpent(
+  val groupId: String,
+  val groupName: String,
+  val amount: Double
+)
+
+@Serializable
+data class MonthlySpent(
+  val month: String,
+  val amount: Double
+)
+
+@Serializable
+data class UserStatsResponse(
+  val totalSpent: Double,
+  val totalOwedToOthers: Double,
+  val totalOthersOweToMe: Double,
+  val spentByGroup: List<GroupSpent>,
+  val monthlyTrend: List<MonthlySpent>
+)
+
+@Serializable
+data class MemberSpent(
+  val userId: String,
+  val username: String,
+  val amount: Double
+)
+
+@Serializable
+data class GroupStatsResponse(
+  val totalSpent: Double,
+  val userSpent: Double,
+  val userOwed: Double,
+  val memberSpending: List<MemberSpent>,
+  val monthlyTrend: List<MonthlySpent>
 )

@@ -13,6 +13,8 @@ import com.example.splitbill.data.AuthRepository
 import com.example.splitbill.data.BillRepository
 import com.example.splitbill.data.GroupRepository
 import com.example.splitbill.data.ProfileRepository
+import com.example.splitbill.data.SettlementRepository
+import com.example.splitbill.data.InviteRepository
 import com.example.splitbill.data.SettingsManager
 import com.example.splitbill.data.TokenManager
 import com.example.splitbill.data.api.MemberResponse
@@ -30,6 +32,9 @@ import com.example.splitbill.ui.profile.ProfileScreen
 import com.example.splitbill.ui.profile.ProfileViewModel
 import com.example.splitbill.ui.settings.SettingsScreen
 import com.example.splitbill.ui.settings.SettingsViewModel
+import com.example.splitbill.ui.stats.GroupStatsScreen
+import com.example.splitbill.ui.stats.GroupStatsViewModel
+import com.example.splitbill.data.StatsRepository
 import com.example.splitbill.ui.components.HomeTab
 import com.example.splitbill.ui.components.FloatingBottomBar
 import androidx.compose.animation.Crossfade
@@ -47,8 +52,15 @@ import kotlinx.serialization.Serializable
 @Serializable data object Login : NavKey
 @Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Groups) : NavKey
 @Serializable data class GroupDetail(val groupId: String) : NavKey
-@Serializable data class AddBill(val groupId: String, val memberIds: List<String>, val memberNames: List<String>, val memberEmails: List<String>) : NavKey
+@Serializable data class AddBill(
+  val groupId: String, 
+  val memberIds: List<String>, 
+  val memberNames: List<String>, 
+  val memberEmails: List<String>,
+  val existingBillJson: String? = null
+) : NavKey
 @Serializable data class DebtSummary(val groupId: String) : NavKey
+@Serializable data class GroupStats(val groupId: String) : NavKey
 @Serializable data object Profile : NavKey
 @Serializable data object Settings : NavKey
 
@@ -99,8 +111,9 @@ fun MainNavigation(settingsManager: SettingsManager) {
       entry<GroupDetail> { key ->
         val groupRepository = GroupRepository(tokenManager)
         val billRepository = BillRepository(tokenManager)
+        val inviteRepository = InviteRepository(tokenManager)
         val viewModel = viewModel(key = key.groupId) {
-          GroupDetailViewModel(key.groupId, groupRepository, billRepository)
+          GroupDetailViewModel(key.groupId, groupRepository, billRepository, inviteRepository)
         }
         GroupDetailScreen(
           viewModel = viewModel,
@@ -118,6 +131,21 @@ fun MainNavigation(settingsManager: SettingsManager) {
           },
           onViewDebts = { groupId ->
             backStack.add(DebtSummary(groupId))
+          },
+          onViewStats = { groupId ->
+            backStack.add(GroupStats(groupId))
+          },
+          onEditBill = { groupId, bill, members ->
+            val jsonStr = kotlinx.serialization.json.Json.encodeToString(com.example.splitbill.data.api.BillResponse.serializer(), bill)
+            backStack.add(
+              AddBill(
+                groupId = groupId,
+                memberIds = members.map { it.userId },
+                memberNames = members.map { it.username },
+                memberEmails = members.map { it.email },
+                existingBillJson = jsonStr
+              )
+            )
           }
         )
       }
@@ -134,10 +162,18 @@ fun MainNavigation(settingsManager: SettingsManager) {
             joinedAt = ""
           )
         }
+        val existingBill = key.existingBillJson?.let {
+          try {
+            kotlinx.serialization.json.Json.decodeFromString(com.example.splitbill.data.api.BillResponse.serializer(), it)
+          } catch (e: Exception) {
+            null
+          }
+        }
         AddBillScreen(
           viewModel = viewModel,
           groupId = key.groupId,
           members = members,
+          existingBill = existingBill,
           onNavigateBack = {
             // Tăng signal → GroupDetailScreen sẽ tự refresh
             refreshSignal.intValue++
@@ -149,13 +185,25 @@ fun MainNavigation(settingsManager: SettingsManager) {
       entry<DebtSummary> { key ->
         val billRepository = BillRepository(tokenManager)
         val profileRepository = ProfileRepository(tokenManager)
+        val settlementRepository = SettlementRepository(tokenManager)
         val viewModel = viewModel(key = key.groupId) {
-          DebtSummaryViewModel(key.groupId, billRepository, profileRepository)
+          DebtSummaryViewModel(key.groupId, billRepository, profileRepository, settlementRepository)
         }
         DebtSummaryScreen(
           viewModel = viewModel,
           onNavigateBack = { backStack.removeLastOrNull() },
           onNavigateToProfile = { backStack.add(Profile) }
+        )
+      }
+
+      entry<GroupStats> { key ->
+        val statsRepository = StatsRepository(tokenManager)
+        val viewModel = viewModel(key = key.groupId) {
+          GroupStatsViewModel(key.groupId, statsRepository)
+        }
+        GroupStatsScreen(
+          viewModel = viewModel,
+          onNavigateBack = { backStack.removeLastOrNull() }
         )
       }
 
@@ -226,7 +274,8 @@ fun HomeTabsScreen(
       when (tab) {
         HomeTab.Groups -> {
           val groupRepository = GroupRepository(tokenManager)
-          val viewModel = viewModel { GroupListViewModel(groupRepository) }
+          val inviteRepository = InviteRepository(tokenManager)
+          val viewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository) }
           GroupListScreen(
             viewModel = viewModel,
             onNavigateToGroup = onNavigateToGroup,

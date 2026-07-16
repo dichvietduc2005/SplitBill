@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.splitbill.data.BillRepository
 import com.example.splitbill.data.ProfileRepository
+import com.example.splitbill.data.SettlementRepository
 import com.example.splitbill.data.api.DebtResponse
 import com.example.splitbill.data.api.ProfileResponse
 import com.example.splitbill.data.api.SimplifiedDebt
@@ -21,7 +22,8 @@ sealed interface DebtSummaryUiState {
 class DebtSummaryViewModel(
   private val groupId: String,
   private val billRepository: BillRepository,
-  private val profileRepository: ProfileRepository
+  private val profileRepository: ProfileRepository,
+  private val settlementRepository: SettlementRepository
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow<DebtSummaryUiState>(DebtSummaryUiState.Loading)
@@ -79,5 +81,15 @@ class DebtSummaryViewModel(
   fun dismissQrSheet() {
     _selectedDebt.value = null
     _creditorProfile.value = null
+  }
+
+  fun settleDebt(toUserId: String, amount: Double, note: String?, onSuccess: () -> Unit) {
+    viewModelScope.launch {
+      val result = settlementRepository.createSettlement(groupId, toUserId, amount, note)
+      if (result.isSuccess) {
+        onSuccess()
+        loadDebts() // Reload debts list
+      }
+    }
   }
 }

@@ -41,6 +41,16 @@ fun Route.billRoutes(billService: BillService) {
             call.respond(HttpStatusCode.OK, response)
         }
 
+        // PUT /bills/{id} - Sửa hóa đơn
+        put("/{id}") {
+            val userId = call.currentUserId()
+            val billId = call.parameters["id"]
+                ?: throw ValidationException("Thiếu ID hóa đơn")
+            val request = call.receive<UpdateBillRequest>()
+            val response = billService.updateBill(billId, request, userId)
+            call.respond(HttpStatusCode.OK, response)
+        }
+
         // DELETE /bills/{id} - Xóa hóa đơn
         delete("/{id}") {
             val userId = call.currentUserId()

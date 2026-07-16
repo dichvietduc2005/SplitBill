@@ -5,10 +5,12 @@ import com.example.splitbill.data.api.BillResponse
 import com.example.splitbill.data.api.CreateBillRequest
 import com.example.splitbill.data.api.BillSplitItem
 import com.example.splitbill.data.api.DebtResponse
+import com.example.splitbill.data.api.UpdateBillRequest
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import kotlinx.coroutines.flow.first
 
@@ -30,6 +32,8 @@ class BillRepository(private val tokenManager: TokenManager) {
     description: String,
     totalAmount: Double,
     paidByUserId: String,
+    currency: String,
+    exchangeRate: Double,
     splits: List<BillSplitItem>
   ): Result<BillResponse> {
     return try {
@@ -40,6 +44,36 @@ class BillRepository(private val tokenManager: TokenManager) {
             description = description,
             totalAmount = totalAmount,
             paidByUserId = paidByUserId,
+            currency = currency,
+            exchangeRate = exchangeRate,
+            splits = splits
+          )
+        )
+      }.body()
+      Result.success(response)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun updateBill(
+    billId: String,
+    description: String,
+    totalAmount: Double,
+    paidByUserId: String,
+    currency: String,
+    exchangeRate: Double,
+    splits: List<BillSplitItem>
+  ): Result<BillResponse> {
+    return try {
+      val response: BillResponse = getClient().put("/api/bills/$billId") {
+        setBody(
+          UpdateBillRequest(
+            description = description,
+            totalAmount = totalAmount,
+            paidByUserId = paidByUserId,
+            currency = currency,
+            exchangeRate = exchangeRate,
             splits = splits
           )
         )

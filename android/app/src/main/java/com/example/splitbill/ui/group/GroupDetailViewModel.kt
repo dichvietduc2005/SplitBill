@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.splitbill.data.BillRepository
 import com.example.splitbill.data.GroupRepository
+import com.example.splitbill.data.InviteRepository
 import com.example.splitbill.data.api.BillResponse
 import com.example.splitbill.data.api.GroupResponse
 import com.example.splitbill.data.api.MemberResponse
+import com.example.splitbill.data.api.InviteResponse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +28,8 @@ data class GroupDetailState(
 class GroupDetailViewModel(
   private val groupId: String,
   private val groupRepository: GroupRepository,
-  private val billRepository: BillRepository
+  private val billRepository: BillRepository,
+  private val inviteRepository: InviteRepository
 ) : ViewModel() {
 
   private val _state = MutableStateFlow(GroupDetailState())
@@ -122,5 +125,25 @@ class GroupDetailViewModel(
 
   fun clearActionMessage() {
     _state.value = _state.value.copy(actionMessage = null)
+  }
+
+  private val _activeInvite = MutableStateFlow<InviteResponse?>(null)
+  val activeInvite: StateFlow<InviteResponse?> = _activeInvite.asStateFlow()
+
+  fun loadOrCreateActiveInvite() {
+    viewModelScope.launch {
+      val activeResult = inviteRepository.getActiveInvites(groupId)
+      val existing = activeResult.getOrNull()?.firstOrNull()
+      if (existing != null) {
+        _activeInvite.value = existing
+      } else {
+        val createResult = inviteRepository.createInvite(groupId, maxUses = null)
+        _activeInvite.value = createResult.getOrNull()
+      }
+    }
+  }
+
+  fun clearActiveInvite() {
+    _activeInvite.value = null
   }
 }
