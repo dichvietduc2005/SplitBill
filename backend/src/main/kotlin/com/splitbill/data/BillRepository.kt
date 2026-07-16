@@ -11,6 +11,8 @@ data class Bill(
     val description: String,
     val totalAmount: BigDecimal,
     val paidByUserId: String,
+    val currency: String,
+    val exchangeRate: BigDecimal,
     val createdAt: String
 )
 
@@ -28,6 +30,8 @@ class BillRepository {
         description: String,
         totalAmount: Double,
         paidByUserId: String,
+        currency: String,
+        exchangeRate: Double,
         splits: List<Pair<String, Double>> // List<Pair<userId, amountOwed>>
     ): Bill? = DatabaseFactory.dbQuery {
         val billId = UUID.fromString(
@@ -36,6 +40,8 @@ class BillRepository {
                 it[Bills.description] = description
                 it[Bills.totalAmount] = BigDecimal.valueOf(totalAmount)
                 it[Bills.paidByUserId] = UUID.fromString(paidByUserId)
+                it[Bills.currency] = currency
+                it[Bills.exchangeRate] = BigDecimal.valueOf(exchangeRate)
             }.resultedValues?.singleOrNull()?.get(Bills.id)?.toString()
                 ?: return@dbQuery null
         )
@@ -106,6 +112,45 @@ class BillRepository {
             .map { resultRowToBill(it) }
     }
 
+    // Cập nhật hóa đơn và cập nhật lại danh sách chia nợ
+    suspend fun updateBill(
+        billId: String,
+        description: String,
+        totalAmount: Double,
+        paidByUserId: String,
+        currency: String,
+        exchangeRate: Double,
+        splits: List<Pair<String, Double>> // List<Pair<userId, amountOwed>>
+    ): Bill? = DatabaseFactory.dbQuery {
+        val uuid = UUID.fromString(billId)
+        
+        // 1. Cập nhật bảng Bills
+        Bills.update({ Bills.id eq uuid }) {
+            it[Bills.description] = description
+            it[Bills.totalAmount] = BigDecimal.valueOf(totalAmount)
+            it[Bills.paidByUserId] = UUID.fromString(paidByUserId)
+            it[Bills.currency] = currency
+            it[Bills.exchangeRate] = BigDecimal.valueOf(exchangeRate)
+        }
+
+        // 2. Xóa các splits cũ
+        BillSplits.deleteWhere { BillSplits.billId eq uuid }
+
+        // 3. Thêm các splits mới
+        for ((userId, amount) in splits) {
+            BillSplits.insert {
+                it[BillSplits.billId] = uuid
+                it[BillSplits.userId] = UUID.fromString(userId)
+                it[BillSplits.amountOwed] = BigDecimal.valueOf(amount)
+            }
+        }
+
+        // 4. Trả về thông tin bill sau khi cập nhật
+        Bills.selectAll().where { Bills.id eq uuid }
+            .map { resultRowToBill(it) }
+            .singleOrNull()
+    }
+
     // Xóa hóa đơn (cascade xóa splits trước)
     suspend fun deleteBill(billId: String): Boolean = DatabaseFactory.dbQuery {
         val uuid = UUID.fromString(billId)
@@ -119,6 +164,8 @@ class BillRepository {
         description = row[Bills.description],
         totalAmount = row[Bills.totalAmount],
         paidByUserId = row[Bills.paidByUserId].toString(),
+        currency = row[Bills.currency],
+        exchangeRate = row[Bills.exchangeRate],
         createdAt = row[Bills.createdAt].toString()
     )
 }

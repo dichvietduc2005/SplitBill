@@ -10,6 +10,9 @@ import com.splitbill.routes.billRoutes
 import com.splitbill.routes.groupRoutes
 import com.splitbill.routes.profileRoutes
 import com.splitbill.routes.userRoutes
+import com.splitbill.routes.settlementRoutes
+import com.splitbill.routes.inviteRoutes
+import com.splitbill.routes.statsRoutes
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -90,6 +93,9 @@ fun Application.module() {
     val groupService by inject<com.splitbill.service.GroupService>()
     val billService by inject<com.splitbill.service.BillService>()
     val profileService by inject<com.splitbill.service.ProfileService>()
+    val settlementService by inject<com.splitbill.service.SettlementService>()
+    val inviteService by inject<com.splitbill.service.InviteService>()
+    val statsService by inject<com.splitbill.service.StatsService>()
 
     routing {
         get("/") {
@@ -120,6 +126,15 @@ fun Application.module() {
 
                 // API Profile & Ngân hàng (VietQR)
                 profileRoutes(profileService)
+
+                // API Thanh toán nợ (Settlements)
+                settlementRoutes(settlementService)
+
+                // API Mã mời tham gia nhóm (Invites)
+                inviteRoutes(inviteService)
+
+                // API Thống kê chi tiêu cá nhân (Stats)
+                statsRoutes(statsService)
             }
         }
     }

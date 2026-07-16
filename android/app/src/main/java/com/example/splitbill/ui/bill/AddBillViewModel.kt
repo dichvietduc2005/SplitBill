@@ -28,6 +28,8 @@ class AddBillViewModel(
     description: String,
     totalAmount: Double,
     paidByUserId: String,
+    currency: String,
+    exchangeRate: Double,
     splits: List<BillSplitItem>
   ) {
     if (description.isBlank()) {
@@ -44,17 +46,55 @@ class AddBillViewModel(
     }
     val splitsSum = splits.sumOf { it.amount }
     if (kotlin.math.abs(splitsSum - totalAmount) > 0.01) {
-      _uiState.value = AddBillUiState.Error("Tổng chia (${splitsSum.toLong()}đ) chưa khớp tổng hóa đơn (${totalAmount.toLong()}đ)")
+      _uiState.value = AddBillUiState.Error("Tổng chia (${splitsSum.toLong()}$currency) chưa khớp tổng hóa đơn (${totalAmount.toLong()}$currency)")
       return
     }
 
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
-      val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, splits)
+      val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
       _uiState.value = if (result.isSuccess) {
         AddBillUiState.Success
       } else {
         AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tạo hóa đơn")
+      }
+    }
+  }
+
+  fun updateBill(
+    billId: String,
+    description: String,
+    totalAmount: Double,
+    paidByUserId: String,
+    currency: String,
+    exchangeRate: Double,
+    splits: List<BillSplitItem>
+  ) {
+    if (description.isBlank()) {
+      _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
+      return
+    }
+    if (totalAmount <= 0) {
+      _uiState.value = AddBillUiState.Error("Tổng tiền phải lớn hơn 0")
+      return
+    }
+    if (splits.isEmpty()) {
+      _uiState.value = AddBillUiState.Error("Phải chọn ít nhất 1 người chia")
+      return
+    }
+    val splitsSum = splits.sumOf { it.amount }
+    if (kotlin.math.abs(splitsSum - totalAmount) > 0.01) {
+      _uiState.value = AddBillUiState.Error("Tổng chia (${splitsSum.toLong()}$currency) chưa khớp tổng hóa đơn (${totalAmount.toLong()}$currency)")
+      return
+    }
+
+    _uiState.value = AddBillUiState.Loading
+    viewModelScope.launch {
+      val result = billRepository.updateBill(billId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
+      _uiState.value = if (result.isSuccess) {
+        AddBillUiState.Success
+      } else {
+        AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi cập nhật hóa đơn")
       }
     }
   }

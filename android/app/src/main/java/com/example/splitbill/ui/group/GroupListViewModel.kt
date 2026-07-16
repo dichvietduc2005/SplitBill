@@ -3,6 +3,7 @@ package com.example.splitbill.ui.group
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.splitbill.data.GroupRepository
+import com.example.splitbill.data.InviteRepository
 import com.example.splitbill.data.api.GroupResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,10 @@ sealed interface GroupListUiState {
   data class Error(val message: String) : GroupListUiState
 }
 
-class GroupListViewModel(private val groupRepository: GroupRepository) : ViewModel() {
+class GroupListViewModel(
+  private val groupRepository: GroupRepository,
+  private val inviteRepository: InviteRepository
+) : ViewModel() {
   private val _uiState = MutableStateFlow<GroupListUiState>(GroupListUiState.Loading)
   val uiState: StateFlow<GroupListUiState> = _uiState.asStateFlow()
 
@@ -63,6 +67,24 @@ class GroupListViewModel(private val groupRepository: GroupRepository) : ViewMod
         val currentState = _uiState.value
         if (currentState is GroupListUiState.Success) {
           _uiState.value = currentState.copy(actionMessage = result.getOrNull() ?: "Đã tham gia nhóm")
+        }
+        loadGroups() // Reload
+      } else {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+        }
+      }
+    }
+  }
+
+  fun joinByInvite(inviteCode: String) {
+    viewModelScope.launch {
+      val result = inviteRepository.joinByInvite(inviteCode)
+      if (result.isSuccess) {
+        val currentState = _uiState.value
+        if (currentState is GroupListUiState.Success) {
+          _uiState.value = currentState.copy(actionMessage = "Đã tham gia nhóm thành công")
         }
         loadGroups() // Reload
       } else {

@@ -4,10 +4,15 @@ import com.splitbill.auth.JwtConfig
 import com.splitbill.data.BillRepository
 import com.splitbill.data.GroupRepository
 import com.splitbill.data.UserRepository
+import com.splitbill.data.SettlementRepository
+import com.splitbill.data.InviteRepository
 import com.splitbill.service.AuthService
 import com.splitbill.service.BillService
 import com.splitbill.service.GroupService
 import com.splitbill.service.ProfileService
+import com.splitbill.service.SettlementService
+import com.splitbill.service.InviteService
+import com.splitbill.service.StatsService
 import org.koin.dsl.module
 
 /**
@@ -26,6 +31,8 @@ val appModule = module {
     single { UserRepository() }
     single { GroupRepository() }
     single { BillRepository() }
+    single { SettlementRepository() }
+    single { InviteRepository() }
 
     // JwtConfig — inject ApplicationEnvironment từ Koin's parameter
     single { JwtConfig(get()) }
@@ -33,6 +40,9 @@ val appModule = module {
     // Services
     single { AuthService(get(), get()) }
     single { GroupService(get(), get()) }
-    single { BillService(get(), get(), get()) }
+    single { BillService(get(), get(), get(), get()) }
     single { ProfileService(get()) }
+    single { SettlementService(get(), get(), get()) }
+    single { InviteService(get(), get(), get()) }
+    single { StatsService(get(), get(), get()) }
 }
