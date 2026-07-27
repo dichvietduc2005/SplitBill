@@ -27,6 +27,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitbill.theme.Dimens
 import com.example.splitbill.ui.components.AmountText
 import com.example.splitbill.ui.components.EmptyState
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.ui.platform.LocalContext
+import com.example.splitbill.ui.components.ExportBottomSheet
 import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
 
@@ -37,6 +40,8 @@ fun GroupStatsScreen(
   modifier: Modifier = Modifier
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
+  var showExportSheet by remember { mutableStateOf(false) }
 
   Scaffold(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -46,6 +51,9 @@ fun GroupStatsScreen(
         canNavigateBack = true,
         onNavigateBack = onNavigateBack,
         actions = {
+          IconButton(onClick = { showExportSheet = true }) {
+            Icon(Icons.Default.FileDownload, contentDescription = "Xuất báo cáo", tint = MaterialTheme.colorScheme.primary)
+          }
           IconButton(onClick = { viewModel.loadGroupStats() }) {
             Icon(Icons.Default.Refresh, contentDescription = "Làm mới", tint = MaterialTheme.colorScheme.primary)
           }
@@ -54,6 +62,14 @@ fun GroupStatsScreen(
     },
     modifier = modifier.fillMaxSize()
   ) { paddingValues ->
+    if (showExportSheet) {
+      ExportBottomSheet(
+        onDismiss = { showExportSheet = false },
+        onExportPdf = { viewModel.exportPdf(context, "Chi_tieu_nhom") },
+        onExportCsv = { viewModel.exportCsv(context, "Chi_tieu_nhom") }
+      )
+    }
+
     when (val state = uiState) {
       is GroupStatsUiState.Loading -> {
         Box(
