@@ -15,6 +15,9 @@ data class RegisterRequest(val username: String, val email: String, val password
 @Serializable
 data class AuthResponse(val token: String)
 
+@Serializable
+data class RegisterFcmTokenRequest(val token: String)
+
 // ==========================================
 // GROUP
 // ==========================================
@@ -57,6 +60,8 @@ data class BillResponse(
   val paidByUsername: String,
   val currency: String,
   val exchangeRate: Double,
+  val receiptUrl: String? = null,
+  val isPaid: Boolean = false,
   val splits: List<BillSplitResponse>,
   val createdAt: String
 )
@@ -154,7 +159,8 @@ data class CreateSettlementRequest(
   val groupId: String,
   val toUserId: String,
   val amount: Double,
-  val note: String? = null
+  val note: String? = null,
+  val fromUserId: String? = null
 )
 
 @Serializable
@@ -237,4 +243,23 @@ data class GroupStatsResponse(
   val userOwed: Double,
   val memberSpending: List<MemberSpent>,
   val monthlyTrend: List<MonthlySpent>
+)
+
+@Serializable
+data class ActivityResponse(
+  val id: String,
+  val groupId: String,
+  val userId: String,
+  val username: String,
+  val activityType: String,
+  val description: String,
+  val createdAt: String
+)
+
+@Serializable
+data class PaginatedActivityResponse(
+  val data: List<ActivityResponse>,
+  val total: Long,
+  val limit: Int,
+  val offset: Int
 )

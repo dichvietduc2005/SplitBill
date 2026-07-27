@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.kotlin.android)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.google.services)
 }
 
 android {
@@ -106,4 +107,13 @@ dependencies {
   
   // Chrome Custom Tabs (for VietQR deep link redirect)
   implementation(libs.androidx.browser)
+
+  // Firebase Cloud Messaging
+  implementation(platform(libs.firebase.bom))
+  implementation(libs.firebase.messaging)
+
+  // Jetpack Glance App Widget & WorkManager
+  implementation("androidx.glance:glance-appwidget:1.1.1")
+  implementation("androidx.glance:glance-material3:1.1.1")
+  implementation("androidx.work:work-runtime-ktx:2.10.0")
 }

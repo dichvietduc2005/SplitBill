@@ -10,17 +10,31 @@ import com.splitbill.models.*
 class SettlementService(
     private val settlementRepository: SettlementRepository,
     private val groupRepository: GroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val fcmService: FcmService,
+    private val activityRepository: com.splitbill.data.ActivityRepository
 ) {
 
-    suspend fun createSettlement(request: CreateSettlementRequest, fromUserId: String): SettlementResponse {
+    private fun formatMoney(amount: Double): String {
+        val df = java.text.DecimalFormat("#,###")
+        return "${df.format(amount)} VND"
+    }
+
+    suspend fun createSettlement(request: CreateSettlementRequest, callerUserId: String): SettlementResponse {
+        val fromUserId = request.fromUserId ?: callerUserId
+        val toUserId = request.toUserId
+
+        if (callerUserId != fromUserId && callerUserId != toUserId) {
+            throw ForbiddenException("Bạn không có quyền ghi nhận giao dịch này")
+        }
+
         // Kiểm tra quyền: người thanh toán phải ở trong nhóm
         if (!groupRepository.isMember(request.groupId, fromUserId)) {
-            throw ForbiddenException("Bạn không phải thành viên nhóm này")
+            throw ForbiddenException("Người thanh toán không phải thành viên nhóm")
         }
 
         // Kiểm tra người nhận tiền cũng phải ở trong nhóm
-        if (!groupRepository.isMember(request.groupId, request.toUserId)) {
+        if (!groupRepository.isMember(request.groupId, toUserId)) {
             throw ValidationException("Người nhận tiền không phải thành viên nhóm")
         }
 
@@ -31,10 +45,32 @@ class SettlementService(
         val settlement = settlementRepository.createSettlement(
             groupId = request.groupId,
             fromUserId = fromUserId,
-            toUserId = request.toUserId,
+            toUserId = toUserId,
             amount = request.amount,
             note = request.note
         ) ?: throw InternalException("Lỗi server khi lưu thanh toán")
+
+        // Gửi thông báo FCM và Ghi log hoạt động
+        val group = groupRepository.getGroupById(request.groupId)
+        val fromUser = userRepository.findUserById(fromUserId)
+        val toUser = userRepository.findUserById(toUserId)
+        if (group != null && fromUser != null && toUser != null) {
+            val amountFormatted = formatMoney(request.amount)
+            fcmService.sendToGroup(
+                groupId = request.groupId,
+                excludeUserId = callerUserId,
+                title = group.name,
+                body = "${fromUser.username} đã thanh toán $amountFormatted cho ${toUser.username}",
+                type = "DEBT_SETTLED"
+            )
+
+            activityRepository.createLog(
+                groupId = request.groupId,
+                userId = callerUserId,
+                activityType = "DEBT_SETTLED",
+                description = "${fromUser.username} đã thanh toán $amountFormatted cho ${toUser.username}"
+            )
+        }
 
         return toSettlementResponse(settlement)
     }

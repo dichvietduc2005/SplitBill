@@ -5,6 +5,7 @@ import com.example.splitbill.data.api.ProfileResponse
 import com.example.splitbill.data.api.UpdateBankInfoRequest
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,31 @@ class ProfileRepository(private val tokenManager: TokenManager) {
         setBody(UpdateBankInfoRequest(bankCode, accountNumber, accountName))
       }.body()
       Result.success(response["message"] ?: "Cập nhật thành công")
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  /** Upload ảnh đại diện */
+  suspend fun uploadAvatar(imageBytes: ByteArray): Result<String> {
+    return try {
+      val response: Map<String, String> = getClient().post("/api/profile/avatar") {
+        setBody(
+          io.ktor.client.request.forms.MultiPartFormDataContent(
+            io.ktor.client.request.forms.formData {
+              append(
+                key = "file",
+                value = imageBytes,
+                headers = io.ktor.http.Headers.build {
+                  append(io.ktor.http.HttpHeaders.ContentType, "image/jpeg")
+                  append(io.ktor.http.HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                }
+              )
+            }
+          )
+        )
+      }.body()
+      Result.success(response["avatarUrl"] ?: "")
     } catch (e: Exception) {
       Result.failure(e)
     }

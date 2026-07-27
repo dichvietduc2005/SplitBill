@@ -6,6 +6,9 @@ import com.splitbill.exceptions.InternalException
 import com.splitbill.exceptions.NotFoundException
 import com.splitbill.exceptions.ValidationException
 import com.splitbill.models.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * BillService — chứa logic nghiệp vụ quản lý hóa đơn & tối giản nợ:
@@ -18,8 +21,16 @@ class BillService(
     private val billRepository: BillRepository,
     private val groupRepository: GroupRepository,
     private val userRepository: UserRepository,
-    private val settlementRepository: SettlementRepository
+    private val settlementRepository: SettlementRepository,
+    private val fcmService: FcmService,
+    private val storageService: StorageService,
+    private val activityRepository: ActivityRepository
 ) {
+
+    private fun formatMoney(amount: Double, currency: String): String {
+        val df = java.text.DecimalFormat("#,###")
+        return "${df.format(amount)} $currency"
+    }
 
     /**
      * Tạo hóa đơn mới — kiểm tra quyền thành viên cho creator, payer, và tất cả người trong splits.
@@ -52,6 +63,33 @@ class BillService(
             exchangeRate = request.exchangeRate,
             splits = splits
         ) ?: throw InternalException("Lỗi server khi tạo hóa đơn")
+
+        // Gửi thông báo FCM và Ghi log hoạt động (bất đồng bộ để response trả về tức thì)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val group = groupRepository.getGroupById(request.groupId)
+                val actor = userRepository.findUserById(userId)
+                if (group != null && actor != null) {
+                    val amountFormatted = formatMoney(request.totalAmount, request.currency)
+                    fcmService.sendToGroup(
+                        groupId = request.groupId,
+                        excludeUserId = userId,
+                        title = group.name,
+                        body = "${actor.username} vừa thêm hóa đơn '${request.description}': $amountFormatted",
+                        type = "BILL_CREATED"
+                    )
+
+                    activityRepository.createLog(
+                        groupId = request.groupId,
+                        userId = userId,
+                        activityType = "BILL_CREATED",
+                        description = "${actor.username} đã thêm hóa đơn '${request.description}': $amountFormatted"
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore background notification errors
+            }
+        }
 
         return toBillResponse(bill)
     }
@@ -111,6 +149,33 @@ class BillService(
             splits = splits
         ) ?: throw InternalException("Lỗi server khi cập nhật hóa đơn")
 
+        // Gửi thông báo FCM và Ghi log hoạt động bất đồng bộ
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val group = groupRepository.getGroupById(existingBill.groupId)
+                val actor = userRepository.findUserById(userId)
+                if (group != null && actor != null) {
+                    val amountFormatted = formatMoney(request.totalAmount, request.currency)
+                    fcmService.sendToGroup(
+                        groupId = existingBill.groupId,
+                        excludeUserId = userId,
+                        title = group.name,
+                        body = "${actor.username} vừa sửa hóa đơn '${request.description}': $amountFormatted",
+                        type = "BILL_EDITED"
+                    )
+
+                    activityRepository.createLog(
+                        groupId = existingBill.groupId,
+                        userId = userId,
+                        activityType = "BILL_UPDATED",
+                        description = "${actor.username} đã cập nhật hóa đơn '${request.description}': $amountFormatted"
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore background notification errors
+            }
+        }
+
         return toBillResponse(updatedBill)
     }
 
@@ -130,7 +195,52 @@ class BillService(
             throw InternalException("Lỗi khi xóa hóa đơn")
         }
 
+        // Gửi thông báo FCM và Ghi log hoạt động bất đồng bộ
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val group = groupRepository.getGroupById(bill.groupId)
+                val actor = userRepository.findUserById(userId)
+                if (group != null && actor != null) {
+                    fcmService.sendToGroup(
+                        groupId = bill.groupId,
+                        excludeUserId = userId,
+                        title = group.name,
+                        body = "${actor.username} vừa xóa hóa đơn '${bill.description}'",
+                        type = "BILL_DELETED"
+                    )
+
+                    activityRepository.createLog(
+                        groupId = bill.groupId,
+                        userId = userId,
+                        activityType = "BILL_DELETED",
+                        description = "${actor.username} đã xóa hóa đơn '${bill.description}'"
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore background notification errors
+            }
+        }
+
         return "Đã xóa hóa đơn thành công"
+    }
+
+    suspend fun uploadReceipt(billId: String, fileBytes: ByteArray, userId: String): String {
+        val bill = billRepository.getBillById(billId)
+            ?: throw NotFoundException("Không tìm thấy hóa đơn")
+
+        if (!groupRepository.isMember(bill.groupId, userId)) {
+            throw ForbiddenException("Bạn không có quyền sửa hóa đơn này")
+        }
+
+        val receiptPath = storageService.saveReceipt(bill.groupId, billId, fileBytes)
+        val finalUrl = if (receiptPath.startsWith("http") || receiptPath.startsWith("/")) receiptPath else "/$receiptPath"
+
+        val success = billRepository.updateReceiptUrl(billId, finalUrl)
+        if (!success) {
+            throw InternalException("Lỗi khi lưu ảnh hóa đơn vào database")
+        }
+
+        return finalUrl
     }
 
     /**
@@ -170,6 +280,36 @@ class BillService(
         )
     }
 
+    suspend fun updateBillPaidStatus(billId: String, isPaid: Boolean, userId: String): Boolean {
+        val bill = billRepository.getBillById(billId)
+            ?: throw NotFoundException("Không tìm thấy hóa đơn")
+        if (!groupRepository.isMember(bill.groupId, userId)) {
+            throw ForbiddenException("Bạn không phải thành viên nhóm này")
+        }
+        val success = billRepository.updateBillPaidStatus(billId, isPaid)
+        if (success) {
+            val group = groupRepository.getGroupById(bill.groupId)
+            val actor = userRepository.findUserById(userId)
+            if (group != null && actor != null) {
+                fcmService.sendToGroup(
+                    groupId = bill.groupId,
+                    excludeUserId = userId,
+                    title = group.name,
+                    body = "Hóa đơn '${bill.description}' đã được đánh dấu là ${if (isPaid) "đã thanh toán" else "chưa thanh toán"}",
+                    type = "BILL_UPDATED"
+                )
+
+                activityRepository.createLog(
+                    groupId = bill.groupId,
+                    userId = userId,
+                    activityType = "BILL_UPDATED",
+                    description = "${actor.username} đã đánh dấu hóa đơn '${bill.description}' là ${if (isPaid) "đã thanh toán" else "chưa thanh toán"}"
+                )
+            }
+        }
+        return success
+    }
+
     /**
      * Helper chuyển đổi Bill entity → BillResponse DTO (kèm username và splits).
      */
@@ -194,6 +334,8 @@ class BillService(
             paidByUsername = paidByUser?.username ?: "Unknown",
             currency = bill.currency,
             exchangeRate = bill.exchangeRate.toDouble(),
+            receiptUrl = bill.receiptUrl,
+            isPaid = bill.isPaid,
             splits = splitResponses,
             createdAt = bill.createdAt
         )

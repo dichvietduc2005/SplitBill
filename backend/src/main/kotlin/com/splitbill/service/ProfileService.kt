@@ -11,7 +11,8 @@ import com.splitbill.models.UpdateBankInfoRequest
  * ProfileService — chứa logic quản lý thông tin cá nhân & ngân hàng.
  */
 class ProfileService(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val storageService: StorageService
 ) {
 
     suspend fun getMyProfile(userId: String): ProfileResponse {
@@ -57,5 +58,14 @@ class ProfileService(
         }
 
         return "Cập nhật thông tin ngân hàng thành công"
+    }
+
+    suspend fun uploadAvatar(userId: String, fileBytes: ByteArray, contentType: String = "image/jpeg"): String {
+        val avatarUrl = storageService.saveAvatar(userId, fileBytes, contentType)
+        val success = userRepository.updateAvatarUrl(userId, avatarUrl)
+        if (!success) {
+            throw InternalException("Lỗi khi cập nhật avatar vào database")
+        }
+        return avatarUrl
     }
 }

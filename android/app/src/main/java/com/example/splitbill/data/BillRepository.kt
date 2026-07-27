@@ -13,6 +13,10 @@ import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import kotlinx.coroutines.flow.first
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 
 class BillRepository(private val tokenManager: TokenManager) {
 
@@ -93,10 +97,39 @@ class BillRepository(private val tokenManager: TokenManager) {
     }
   }
 
+  suspend fun uploadReceipt(billId: String, imageBytes: ByteArray): Result<String> {
+    return try {
+      val response: Map<String, String> = getClient().post("/api/bills/$billId/receipt") {
+        setBody(
+          MultiPartFormDataContent(
+            formData {
+              append("receipt", imageBytes, Headers.build {
+                append(HttpHeaders.ContentType, "image/jpeg")
+                append(HttpHeaders.ContentDisposition, "filename=\"receipt.jpg\"")
+              })
+            }
+          )
+        )
+      }.body()
+      Result.success(response["receiptUrl"] ?: "")
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
   suspend fun getDebtsForGroup(groupId: String): Result<DebtResponse> {
     return try {
       val response: DebtResponse = getClient().get("/api/debts/$groupId").body()
       Result.success(response)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun markBillAsPaid(billId: String, isPaid: Boolean): Result<Unit> {
+    return try {
+      getClient().post("/api/bills/$billId/pay?isPaid=$isPaid")
+      Result.success(Unit)
     } catch (e: Exception) {
       Result.failure(e)
     }

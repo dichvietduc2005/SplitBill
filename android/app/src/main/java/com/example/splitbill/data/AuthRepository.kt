@@ -7,6 +7,7 @@ import com.example.splitbill.data.api.RegisterRequest
 import io.ktor.client.call.body
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.flow.first
 
 class AuthRepository(private val tokenManager: TokenManager) {
@@ -22,7 +23,7 @@ class AuthRepository(private val tokenManager: TokenManager) {
       tokenManager.saveBiometricToken(response.token)
       Result.success(response.token)
     } catch (e: Exception) {
-      Result.failure(e)
+      Result.failure(parseException(e))
     }
   }
 
@@ -37,8 +38,21 @@ class AuthRepository(private val tokenManager: TokenManager) {
       tokenManager.saveBiometricToken(response.token)
       Result.success(response.token)
     } catch (e: Exception) {
-      Result.failure(e)
+      Result.failure(parseException(e))
     }
+  }
+
+  private suspend fun parseException(e: Exception): Exception {
+    if (e is io.ktor.client.plugins.ResponseException) {
+      try {
+        val errorText = e.response.bodyAsText()
+        val json = org.json.JSONObject(errorText)
+        if (json.has("message")) {
+          return Exception(json.getString("message"))
+        }
+      } catch (_: Exception) {}
+    }
+    return e
   }
 
   suspend fun logout() {

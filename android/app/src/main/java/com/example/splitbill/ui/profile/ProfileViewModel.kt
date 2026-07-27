@@ -53,6 +53,18 @@ class ProfileViewModel(
     }
   }
 
+  fun uploadAvatar(imageBytes: ByteArray) {
+    viewModelScope.launch {
+      val result = profileRepository.uploadAvatar(imageBytes)
+      if (result.isSuccess) {
+        _saveState.value = "avatar_success"
+        loadProfile()
+      } else {
+        _saveState.value = "error:${result.exceptionOrNull()?.message}"
+      }
+    }
+  }
+
   fun clearSaveState() {
     _saveState.value = null
   }

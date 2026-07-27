@@ -47,7 +47,8 @@ object DatabaseFactory {
                 Bills,
                 BillSplits,
                 Settlements,
-                GroupInvites
+                GroupInvites,
+                ActivityLogs
             )
         }
     }
@@ -100,6 +101,7 @@ object Users : Table("users") {
     val bankCode = varchar("bank_code", 20).nullable()         // Ví dụ: "VCB", "TCB", "MB"
     val accountNumber = varchar("account_number", 30).nullable() // Số tài khoản ngân hàng
     val accountName = varchar("account_name", 100).nullable()   // Tên chủ tài khoản
+    val fcmToken = varchar("fcm_token", 500).nullable()
     val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
@@ -133,6 +135,8 @@ object Bills : Table("bills") {
     val paidByUserId = reference("paid_by_user_id", Users.id)
     val currency = varchar("currency", 3).default("VND")
     val exchangeRate = decimal("exchange_rate", 15, 6).default(java.math.BigDecimal.ONE)
+    val receiptUrl = varchar("receipt_url", 500).nullable()
+    val isPaid = bool("is_paid").default(false)
     val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)
@@ -169,6 +173,18 @@ object GroupInvites : Table("group_invites") {
     val expiresAt = datetime("expires_at")                    // Hạn 7 ngày
     val maxUses = integer("max_uses").nullable()
     val useCount = integer("use_count").default(0)
+    val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+// 8. Bảng nhật ký hoạt động nhóm (ActivityLogs)
+object ActivityLogs : Table("activity_logs") {
+    val id = uuid("id").autoGenerate()
+    val groupId = reference("group_id", Groups.id)
+    val userId = reference("user_id", Users.id)
+    val activityType = varchar("activity_type", 50)
+    val description = varchar("description", 500)
     val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }
 
     override val primaryKey = PrimaryKey(id)

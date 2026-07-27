@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -61,6 +62,7 @@ fun GroupDetailScreen(
   onAddBill: (groupId: String, members: List<MemberResponse>) -> Unit,
   onViewDebts: (groupId: String) -> Unit,
   onViewStats: (groupId: String) -> Unit,
+  onViewActivities: (groupId: String) -> Unit,
   modifier: Modifier = Modifier,
   onEditBill: (groupId: String, bill: BillResponse, members: List<MemberResponse>) -> Unit
 ) {
@@ -104,6 +106,13 @@ fun GroupDetailScreen(
         canNavigateBack = true,
         onNavigateBack = onNavigateBack,
         actions = {
+          IconButton(onClick = { onViewActivities(state.group?.id ?: "") }) {
+            Icon(
+              imageVector = Icons.Default.History,
+              contentDescription = "Lịch sử hoạt động",
+              tint = MaterialTheme.colorScheme.primary
+            )
+          }
           IconButton(onClick = { showGroupInfoDialog = true }) {
             Icon(
               imageVector = Icons.Default.Info,
@@ -248,7 +257,8 @@ fun GroupDetailScreen(
               BillCard(
                 bill = bill, 
                 onDelete = { viewModel.deleteBill(bill.id) },
-                onEdit = { onEditBill(state.group?.id ?: "", bill, state.members) }
+                onEdit = { onEditBill(state.group?.id ?: "", bill, state.members) },
+                onTogglePaid = { viewModel.toggleBillPaidStatus(bill.id, bill.isPaid) }
               )
             }
           }
@@ -774,7 +784,12 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BillCard(bill: BillResponse, onDelete: () -> Unit, onEdit: () -> Unit) {
+private fun BillCard(
+  bill: BillResponse, 
+  onDelete: () -> Unit, 
+  onEdit: () -> Unit,
+  onTogglePaid: () -> Unit
+) {
   var expanded by remember { mutableStateOf(false) }
   var showDeleteDialog by remember { mutableStateOf(false) }
   val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
@@ -848,14 +863,35 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit, onEdit: () -> Uni
           )
         }
         Column(modifier = Modifier.weight(1f)) {
-          Text(
-            bill.description,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
-          )
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              bill.description,
+              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            if (bill.isPaid) {
+              Spacer(Modifier.width(Dimens.SpacingXS))
+              Box(
+                modifier = Modifier
+                  .clip(RoundedCornerShape(4.dp))
+                  .background(Color(0xFFE8F5E9))
+                  .padding(horizontal = 6.dp, vertical = 2.dp)
+              ) {
+                Text(
+                  text = "Đã trả",
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    color = Color(0xFF2E7D32)
+                  )
+                )
+              }
+            }
+          }
           Spacer(Modifier.height(2.dp))
+          val formattedDate = formatCreatedDateTime(bill.createdAt)
           Text(
-            "Trả bởi: ${bill.paidByUsername}",
+            if (formattedDate.isNotBlank()) "Trả bởi: ${bill.paidByUsername} • $formattedDate" else "Trả bởi: ${bill.paidByUsername}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -899,6 +935,49 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit, onEdit: () -> Uni
               AmountText(amount = split.amountOwed, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), currency = bill.currency)
             }
           }
+          if (bill.receiptUrl != null) {
+            Spacer(Modifier.height(Dimens.SpacingS))
+            Text("Ảnh hóa đơn:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(Dimens.SpacingXS))
+            val fullUrl = com.example.splitbill.data.api.ApiService.BASE_URL + bill.receiptUrl
+            AsyncImage(
+              model = fullUrl,
+              contentDescription = "Ảnh hóa đơn",
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+              contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+          }
+
+          Spacer(Modifier.height(Dimens.SpacingS))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+          ) {
+            OutlinedButton(
+              onClick = onTogglePaid,
+              colors = if (bill.isPaid) {
+                ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+              } else {
+                ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF2E7D32))
+              },
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+              Icon(
+                imageVector = if (bill.isPaid) Icons.Default.RemoveCircleOutline else Icons.Default.CheckCircle,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(Modifier.width(6.dp))
+              Text(
+                text = if (bill.isPaid) "Đánh dấu chưa trả" else "Đánh dấu đã thanh toán",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+              )
+            }
+          }
         }
       }
     }
@@ -920,5 +999,32 @@ private fun BillCard(bill: BillResponse, onDelete: () -> Unit, onEdit: () -> Uni
     )
   }
 }
+
+private fun formatCreatedDateTime(isoString: String?): String {
+  if (isoString.isNullOrBlank()) return ""
+  return try {
+    val cleaned = isoString.replace("Z", "").replace("T", " ")
+    val parts = cleaned.split(" ")
+    if (parts.size >= 2) {
+      val dateParts = parts[0].split("-")
+      val timeParts = parts[1].split(":")
+      if (dateParts.size == 3 && timeParts.size >= 2) {
+        val hour = timeParts[0]
+        val minute = timeParts[1]
+        val day = dateParts[2]
+        val month = dateParts[1]
+        val year = dateParts[0]
+        "$hour:$minute - $day/$month/$year"
+      } else {
+        cleaned
+      }
+    } else {
+      isoString
+    }
+  } catch (e: Exception) {
+    isoString
+  }
+}
+
 
 

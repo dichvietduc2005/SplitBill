@@ -398,6 +398,7 @@ fun SettingsScreen(
           visible = true
         }
         AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(3)) {
+          val autoSettleEnabled by viewModel.autoSettleEnabled.collectAsStateWithLifecycle()
           SplitBillCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingL)) {
               // Notification Toggle
@@ -419,6 +420,53 @@ fun SettingsScreen(
                 checked = biometricEnabled,
                 onCheckedChange = { viewModel.saveBiometricEnabled(it) }
               )
+
+              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+              // Auto settle (VietQR notification parsing)
+              val context = androidx.compose.ui.platform.LocalContext.current
+              var hasListenerPermission by remember { mutableStateOf(false) }
+
+              LaunchedEffect(Unit) {
+                val cn = android.content.ComponentName(context, com.example.splitbill.service.BankNotificationListener::class.java)
+                val flat = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+                hasListenerPermission = flat != null && flat.contains(cn.flattenToString())
+              }
+
+              Column {
+                CustomSettingRow(
+                  icon = Icons.Default.AccountBalance,
+                  title = "Tự động nhận diện thanh toán".localized(),
+                  subtitle = "Đọc SMS/Thông báo ngân hàng để đối soát nợ tự động".localized(),
+                  checked = autoSettleEnabled && hasListenerPermission,
+                  onCheckedChange = { isChecked ->
+                    if (isChecked && !hasListenerPermission) {
+                      val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                      context.startActivity(intent)
+                    } else {
+                      viewModel.saveAutoSettleEnabled(isChecked)
+                    }
+                  }
+                )
+
+                if (!hasListenerPermission) {
+                  Spacer(Modifier.height(Dimens.SpacingXS))
+                  TextButton(
+                    onClick = {
+                      val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                      context.startActivity(intent)
+                    },
+                    modifier = Modifier.padding(start = 40.dp)
+                  ) {
+                    Text(
+                      "Cấp quyền đọc thông báo để kích hoạt".localized(),
+                      color = MaterialTheme.colorScheme.error,
+                      style = MaterialTheme.typography.bodyMedium,
+                      fontWeight = FontWeight.Bold
+                    )
+                  }
+                }
+              }
             }
           }
         }

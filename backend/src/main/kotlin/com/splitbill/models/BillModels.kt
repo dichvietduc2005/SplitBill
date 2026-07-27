@@ -47,6 +47,8 @@ data class BillResponse(
     val paidByUsername: String,
     val currency: String,
     val exchangeRate: Double,
+    val receiptUrl: String? = null,
+    val isPaid: Boolean = false,
     val splits: List<BillSplitResponse>,
     val createdAt: String
 )

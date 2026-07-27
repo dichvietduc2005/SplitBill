@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.splitbill.service.NotificationEventBus
 
 data class GroupDetailState(
   val isLoading: Boolean = true,
@@ -37,6 +38,13 @@ class GroupDetailViewModel(
 
   init {
     loadAll()
+    viewModelScope.launch {
+      NotificationEventBus.events.collect { event ->
+        if (event.groupId == groupId) {
+          loadAll()
+        }
+      }
+    }
   }
 
   fun loadAll() {
@@ -118,6 +126,21 @@ class GroupDetailViewModel(
         _state.value = _state.value.copy(
           bills = newBills,
           memberBalances = computeBalances(newBills, _state.value.members)
+        )
+      }
+    }
+  }
+
+  fun toggleBillPaidStatus(billId: String, currentStatus: Boolean) {
+    viewModelScope.launch {
+      val result = billRepository.markBillAsPaid(billId, !currentStatus)
+      if (result.isSuccess) {
+        val updatedBills = _state.value.bills.map {
+          if (it.id == billId) it.copy(isPaid = !currentStatus) else it
+        }
+        _state.value = _state.value.copy(
+          bills = updatedBills,
+          memberBalances = computeBalances(updatedBills, _state.value.members)
         )
       }
     }
