@@ -1,5 +1,6 @@
 package com.example.splitbill.ui.profile
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,11 +23,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.shape.CircleShape
 import com.example.splitbill.theme.Dimens
-import com.example.splitbill.ui.components.LoadingState
-import com.example.splitbill.ui.components.SplitBillCard
 import com.example.splitbill.ui.components.SplitBillTopBar
-
+import com.example.splitbill.ui.components.SplitBillCard
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.ui.platform.LocalContext
+import coil3.compose.AsyncImage
 import com.example.splitbill.theme.Motion
 
 import com.example.splitbill.ui.components.ProfileSkeleton
@@ -91,9 +96,17 @@ fun ProfileScreen(
   }
 
   // Xử lý kết quả lưu
+  val context = LocalContext.current
   LaunchedEffect(saveState) {
     if (saveState == "success") {
       showSaveSuccess = true
+      viewModel.clearSaveState()
+    } else if (saveState == "avatar_success") {
+      Toast.makeText(context, "Đã cập nhật ảnh đại diện thành công!", Toast.LENGTH_SHORT).show()
+      viewModel.clearSaveState()
+    } else if (saveState?.startsWith("error:") == true) {
+      val errorMsg = saveState?.removePrefix("error:") ?: "Thao tác thất bại"
+      Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
       viewModel.clearSaveState()
     }
   }
@@ -121,6 +134,34 @@ fun ProfileScreen(
         }
       }
       is ProfileUiState.Success -> {
+        val fullAvatarUrl = remember(state.profile.avatarUrl) {
+          val url = state.profile.avatarUrl
+          when {
+            url.isNullOrBlank() -> null
+            url.startsWith("http") -> url
+            else -> "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (url.startsWith("/")) "" else "/"}$url"
+          }
+        }
+
+        val photoPickerLauncher = rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+          if (uri != null) {
+            val bytes = compressAvatarImage(context, uri)
+            if (bytes != null) {
+              viewModel.uploadAvatar(bytes)
+            } else {
+              try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                  viewModel.uploadAvatar(inputStream.readBytes())
+                }
+              } catch (e: Exception) {
+                e.printStackTrace()
+              }
+            }
+          }
+        }
+
         LazyColumn(
           modifier = Modifier.padding(paddingValues).fillMaxSize(),
           contentPadding = PaddingValues(Dimens.SpacingM),
@@ -136,18 +177,58 @@ fun ProfileScreen(
             ) {
               SplitBillCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                  // Avatar
-                  Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(56.dp)
+                  // Avatar Circle with small pencil edit badge
+                  Box(
+                    modifier = Modifier
+                      .size(68.dp)
+                      .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                   ) {
-                    Box(contentAlignment = Alignment.Center) {
-                      Text(
-                        state.profile.username.first().uppercaseChar().toString(),
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                      )
+                    Box(
+                      modifier = Modifier
+                        .size(64.dp)
+                        .align(Alignment.TopStart)
+                        .clip(CircleShape)
+                    ) {
+                      if (!fullAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                          model = fullAvatarUrl,
+                          contentDescription = "Avatar",
+                          contentScale = ContentScale.Crop,
+                          modifier = Modifier.fillMaxSize()
+                        )
+                      } else {
+                        Surface(
+                          color = MaterialTheme.colorScheme.primaryContainer,
+                          modifier = Modifier.fillMaxSize()
+                        ) {
+                          Box(contentAlignment = Alignment.Center) {
+                            Text(
+                              state.profile.username.first().uppercaseChar().toString(),
+                              style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                              color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                          }
+                        }
+                      }
+                    }
+
+                    // Small pencil icon badge
+                    Surface(
+                      shape = CircleShape,
+                      color = MaterialTheme.colorScheme.primary,
+                      shadowElevation = 2.dp,
+                      modifier = Modifier
+                        .size(22.dp)
+                        .align(Alignment.BottomEnd)
+                    ) {
+                      Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                          imageVector = Icons.Default.Edit,
+                          contentDescription = "Chỉnh sửa ảnh",
+                          tint = androidx.compose.ui.graphics.Color.White,
+                          modifier = Modifier.size(12.dp)
+                        )
+                      }
                     }
                   }
                   Spacer(Modifier.width(Dimens.SpacingM))
@@ -468,4 +549,28 @@ fun BankSelectionBottomSheet(
     }
   }
 }
+
+private fun compressAvatarImage(context: android.content.Context, uri: android.net.Uri): ByteArray? {
+  return try {
+    val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+    val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream) ?: return null
+    
+    val maxDim = 360
+    val width = originalBitmap.width
+    val height = originalBitmap.height
+    val scale = Math.min(maxDim.toFloat() / width, maxDim.toFloat() / height).coerceAtMost(1.0f)
+    
+    val scaledWidth = (width * scale).toInt()
+    val scaledHeight = (height * scale).toInt()
+    val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
+    
+    val outputStream = java.io.ByteArrayOutputStream()
+    scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+    outputStream.toByteArray()
+  } catch (e: Exception) {
+    e.printStackTrace()
+    null
+  }
+}
+
 
