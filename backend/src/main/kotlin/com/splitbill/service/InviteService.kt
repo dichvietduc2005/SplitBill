@@ -12,7 +12,9 @@ import java.time.format.DateTimeFormatter
 class InviteService(
     private val inviteRepository: InviteRepository,
     private val groupRepository: GroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val fcmService: FcmService,
+    private val activityRepository: com.splitbill.data.ActivityRepository
 ) {
 
     suspend fun createInvite(groupId: String, userId: String, maxUses: Int? = null): InviteResponse {
@@ -81,6 +83,25 @@ class InviteService(
         val added = groupRepository.addMember(invite.groupId, userId)
         if (!added) {
             throw InternalException("Lỗi khi tham gia nhóm")
+        }
+
+        // Gửi thông báo FCM và Ghi log hoạt động
+        val actor = userRepository.findUserById(userId)
+        if (actor != null) {
+            fcmService.sendToGroup(
+                groupId = invite.groupId,
+                excludeUserId = userId,
+                title = group.name,
+                body = "${actor.username} đã tham gia nhóm bằng mã mời",
+                type = "MEMBER_JOINED"
+            )
+
+            activityRepository.createLog(
+                groupId = invite.groupId,
+                userId = userId,
+                activityType = "MEMBER_JOINED",
+                description = "${actor.username} đã tham gia nhóm bằng mã mời"
+            )
         }
 
         // Tăng lượt dùng

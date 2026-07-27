@@ -13,8 +13,10 @@ import com.splitbill.routes.userRoutes
 import com.splitbill.routes.settlementRoutes
 import com.splitbill.routes.inviteRoutes
 import com.splitbill.routes.statsRoutes
+import com.splitbill.routes.fcmTokenRoutes
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
+import io.ktor.server.http.content.staticFiles
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.engine.*
@@ -96,11 +98,15 @@ fun Application.module() {
     val settlementService by inject<com.splitbill.service.SettlementService>()
     val inviteService by inject<com.splitbill.service.InviteService>()
     val statsService by inject<com.splitbill.service.StatsService>()
+    val userRepository by inject<com.splitbill.data.UserRepository>()
+    val activityService by inject<com.splitbill.service.ActivityService>()
 
     routing {
         get("/") {
             call.respondText("Welcome to Split Bill API!")
         }
+
+        staticFiles("/uploads", java.io.File("uploads"))
 
         // ==========================================
         // PHASE 3: Swagger API Documentation
@@ -119,7 +125,7 @@ fun Application.module() {
                 }
 
                 // API Quản lý Nhóm
-                groupRoutes(groupService)
+                groupRoutes(groupService, activityService)
 
                 // API Quản lý Hóa đơn & Tối giản nợ
                 billRoutes(billService)
@@ -135,6 +141,9 @@ fun Application.module() {
 
                 // API Thống kê chi tiêu cá nhân (Stats)
                 statsRoutes(statsService)
+
+                // API Đăng ký FCM token
+                fcmTokenRoutes(userRepository)
             }
         }
     }

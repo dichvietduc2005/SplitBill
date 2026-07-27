@@ -15,7 +15,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object ApiService {
-  private const val BASE_URL = "http://192.168.1.206:8081" // Android emulator to localhost
+  const val BASE_URL = "http://192.168.1.6:8081"
 
   fun createClient(token: String? = null): HttpClient {
     return HttpClient(OkHttp) {

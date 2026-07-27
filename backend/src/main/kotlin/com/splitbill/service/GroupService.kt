@@ -14,7 +14,8 @@ import com.splitbill.models.*
  */
 class GroupService(
     private val groupRepository: GroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val fcmService: FcmService
 ) {
 
     suspend fun createGroup(name: String, userId: String): GroupResponse {
@@ -78,6 +79,19 @@ class GroupService(
             throw com.splitbill.exceptions.ConflictException("'${targetUser.username}' đã là thành viên nhóm")
         }
 
+        // Gửi thông báo FCM
+        val group = groupRepository.getGroupById(groupId)
+        val actor = userRepository.findUserById(requestingUserId)
+        if (group != null && actor != null) {
+            fcmService.sendToGroup(
+                groupId = groupId,
+                excludeUserId = requestingUserId,
+                title = group.name,
+                body = "${actor.username} đã thêm ${targetUser.username} vào nhóm",
+                type = "MEMBER_ADDED"
+            )
+        }
+
         return "Đã thêm '${targetUser.username}' vào nhóm"
     }
 
@@ -89,6 +103,18 @@ class GroupService(
         val added = groupRepository.addMember(groupId, requestingUserId)
         if (!added) {
             throw com.splitbill.exceptions.ConflictException("Bạn đã là thành viên của nhóm này rồi")
+        }
+
+        // Gửi thông báo FCM
+        val actor = userRepository.findUserById(requestingUserId)
+        if (actor != null) {
+            fcmService.sendToGroup(
+                groupId = groupId,
+                excludeUserId = requestingUserId,
+                title = group.name,
+                body = "${actor.username} đã tham gia nhóm",
+                type = "MEMBER_JOINED"
+            )
         }
 
         return "Đã tham gia nhóm '${group.name}'"

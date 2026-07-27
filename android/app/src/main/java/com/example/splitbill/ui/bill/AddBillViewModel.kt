@@ -30,7 +30,8 @@ class AddBillViewModel(
     paidByUserId: String,
     currency: String,
     exchangeRate: Double,
-    splits: List<BillSplitItem>
+    splits: List<BillSplitItem>,
+    receiptBytes: ByteArray? = null
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -53,10 +54,20 @@ class AddBillViewModel(
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
       val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
-      _uiState.value = if (result.isSuccess) {
-        AddBillUiState.Success
+      if (result.isSuccess) {
+        val bill = result.getOrNull()
+        if (bill != null && receiptBytes != null) {
+          val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
+          _uiState.value = if (uploadResult.isSuccess) {
+            AddBillUiState.Success
+          } else {
+            AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
+          }
+        } else {
+          _uiState.value = AddBillUiState.Success
+        }
       } else {
-        AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tạo hóa đơn")
+        _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tạo hóa đơn")
       }
     }
   }
@@ -68,7 +79,8 @@ class AddBillViewModel(
     paidByUserId: String,
     currency: String,
     exchangeRate: Double,
-    splits: List<BillSplitItem>
+    splits: List<BillSplitItem>,
+    receiptBytes: ByteArray? = null
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -91,10 +103,20 @@ class AddBillViewModel(
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
       val result = billRepository.updateBill(billId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
-      _uiState.value = if (result.isSuccess) {
-        AddBillUiState.Success
+      if (result.isSuccess) {
+        val bill = result.getOrNull()
+        if (bill != null && receiptBytes != null) {
+          val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
+          _uiState.value = if (uploadResult.isSuccess) {
+            AddBillUiState.Success
+          } else {
+            AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
+          }
+        } else {
+          _uiState.value = AddBillUiState.Success
+        }
       } else {
-        AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi cập nhật hóa đơn")
+        _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi cập nhật hóa đơn")
       }
     }
   }

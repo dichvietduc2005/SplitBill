@@ -18,6 +18,15 @@ import com.example.splitbill.data.InviteRepository
 import com.example.splitbill.data.SettingsManager
 import com.example.splitbill.data.TokenManager
 import com.example.splitbill.data.api.MemberResponse
+import com.example.splitbill.service.AutoSettleManager
+import com.example.splitbill.service.SettleMatch
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import com.example.splitbill.ui.auth.LoginScreen
 import com.example.splitbill.ui.auth.LoginViewModel
 import com.example.splitbill.ui.bill.AddBillScreen
@@ -34,6 +43,8 @@ import com.example.splitbill.ui.settings.SettingsScreen
 import com.example.splitbill.ui.settings.SettingsViewModel
 import com.example.splitbill.ui.stats.GroupStatsScreen
 import com.example.splitbill.ui.stats.GroupStatsViewModel
+import com.example.splitbill.ui.activity.ActivityFeedScreen
+import com.example.splitbill.ui.activity.ActivityFeedViewModel
 import com.example.splitbill.data.StatsRepository
 import com.example.splitbill.ui.components.HomeTab
 import com.example.splitbill.ui.components.FloatingBottomBar
@@ -49,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 
+@Serializable data object Onboarding : NavKey
 @Serializable data object Login : NavKey
 @Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Groups) : NavKey
 @Serializable data class GroupDetail(val groupId: String) : NavKey
@@ -61,6 +73,7 @@ import kotlinx.serialization.Serializable
 ) : NavKey
 @Serializable data class DebtSummary(val groupId: String) : NavKey
 @Serializable data class GroupStats(val groupId: String) : NavKey
+@Serializable data class ActivityFeed(val groupId: String) : NavKey
 @Serializable data object Profile : NavKey
 @Serializable data object Settings : NavKey
 
@@ -69,14 +82,111 @@ fun MainNavigation(settingsManager: SettingsManager) {
   val backStack = rememberNavBackStack(Login)
   val context = LocalContext.current
   val tokenManager = TokenManager(context)
+  val onboardingCompleted by settingsManager.onboardingCompleted.collectAsState(initial = true)
+
+  LaunchedEffect(onboardingCompleted) {
+    if (!onboardingCompleted && backStack.lastOrNull() == Login) {
+      backStack.clear()
+      backStack.add(Onboarding)
+    }
+  }
 
   // Signal để GroupDetailScreen biết cần refresh khi quay lại từ AddBill
   val refreshSignal = remember { mutableIntStateOf(0) }
+
+  val autoSettleManager = remember {
+    AutoSettleManager(
+      context = context.applicationContext,
+      tokenManager = tokenManager,
+      settingsManager = settingsManager,
+      groupRepository = GroupRepository(tokenManager),
+      billRepository = BillRepository(tokenManager)
+    )
+  }
+
+  var activeMatch by remember { mutableStateOf<SettleMatch?>(null) }
+  var isSettlingMatch by remember { mutableStateOf(false) }
+
+  LaunchedEffect(Unit) {
+    autoSettleManager.pendingMatch.collect { match ->
+      activeMatch = match
+    }
+  }
+
+  if (activeMatch != null) {
+    val match = activeMatch!!
+    val df = remember { java.text.DecimalFormat("#,###") }
+    val amountFormatted = "${df.format(match.transferEvent.amount)} VND"
+    val debtFormatted = "${df.format(match.debt.amount)} VND"
+
+    AlertDialog(
+      onDismissRequest = { 
+        if (!isSettlingMatch) activeMatch = null 
+      },
+      title = { Text("Nhận dạng thanh toán tự động 💸") },
+      text = {
+        Text(
+          "Phát hiện giao dịch nhận $amountFormatted từ ${match.transferEvent.bankName}.\n\n" +
+          "Khớp với khoản nợ trong hệ thống:\n" +
+          "• Nhóm: ${match.groupName}\n" +
+          "• Người nợ: ${match.debt.fromUsername}\n" +
+          "• Số tiền nợ: $debtFormatted\n\n" +
+          "Bạn có muốn ghi nhận khoản nợ này đã được thanh toán không?"
+        )
+      },
+      confirmButton = {
+        Button(
+          enabled = !isSettlingMatch,
+          onClick = {
+            isSettlingMatch = true
+            val settlementRepository = SettlementRepository(tokenManager)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+              val result = settlementRepository.createSettlement(
+                groupId = match.groupId,
+                toUserId = match.debt.toUserId,
+                amount = match.debt.amount,
+                note = "Xác nhận tự động qua ${match.transferEvent.bankName}",
+                fromUserId = match.debt.fromUserId
+              )
+              kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                isSettlingMatch = false
+                activeMatch = null
+                refreshSignal.intValue += 1
+              }
+            }
+          }
+        ) {
+          Text(if (isSettlingMatch) "Đang xử lý..." else "Đồng ý ✅")
+        }
+      },
+      dismissButton = {
+        Button(
+          enabled = !isSettlingMatch,
+          onClick = { activeMatch = null }
+        ) {
+          Text("Bỏ qua")
+        }
+      }
+    )
+  }
 
   NavDisplay(
     backStack = backStack,
     onBack = { backStack.removeLastOrNull() },
     entryProvider = entryProvider {
+
+      entry<Onboarding> {
+        val coroutineScope = rememberCoroutineScope()
+        com.example.splitbill.ui.auth.OnboardingScreen(
+          onFinishOnboarding = {
+            coroutineScope.launch {
+              settingsManager.saveOnboardingCompleted(true)
+              backStack.clear()
+              backStack.add(Login)
+            }
+          }
+        )
+      }
 
       entry<Login> {
         val authRepository = AuthRepository(tokenManager)
@@ -134,6 +244,9 @@ fun MainNavigation(settingsManager: SettingsManager) {
           },
           onViewStats = { groupId ->
             backStack.add(GroupStats(groupId))
+          },
+          onViewActivities = { groupId ->
+            backStack.add(ActivityFeed(groupId))
           },
           onEditBill = { groupId, bill, members ->
             val jsonStr = kotlinx.serialization.json.Json.encodeToString(com.example.splitbill.data.api.BillResponse.serializer(), bill)
@@ -198,10 +311,22 @@ fun MainNavigation(settingsManager: SettingsManager) {
 
       entry<GroupStats> { key ->
         val statsRepository = StatsRepository(tokenManager)
+        val billRepository = BillRepository(tokenManager)
         val viewModel = viewModel(key = key.groupId) {
-          GroupStatsViewModel(key.groupId, statsRepository)
+          GroupStatsViewModel(key.groupId, statsRepository, billRepository)
         }
         GroupStatsScreen(
+          viewModel = viewModel,
+          onNavigateBack = { backStack.removeLastOrNull() }
+        )
+      }
+
+      entry<ActivityFeed> { key ->
+        val groupRepository = GroupRepository(tokenManager)
+        val viewModel = viewModel(key = key.groupId) {
+          ActivityFeedViewModel(groupRepository, key.groupId)
+        }
+        ActivityFeedScreen(
           viewModel = viewModel,
           onNavigateBack = { backStack.removeLastOrNull() }
         )

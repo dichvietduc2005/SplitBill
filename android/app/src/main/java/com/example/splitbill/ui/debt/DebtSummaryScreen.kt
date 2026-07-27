@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -46,8 +47,16 @@ fun DebtSummaryScreen(
   var settlementNote by remember { mutableStateOf("") }
   var showSuccessOverlay by remember { mutableStateOf(false) }
 
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val view = androidx.compose.ui.platform.LocalView.current
+  val settingsManager = remember { com.example.splitbill.data.SettingsManager(context) }
+  val hapticEnabled by settingsManager.hapticEnabled.collectAsState(initial = true)
+  val soundEnabled by settingsManager.soundEnabled.collectAsState(initial = true)
+
   LaunchedEffect(showSuccessOverlay) {
     if (showSuccessOverlay) {
+      if (hapticEnabled) com.example.splitbill.utils.HapticManager.triggerSuccess(view)
+      if (soundEnabled) com.example.splitbill.utils.SoundManager.playPaymentDoneSound()
       kotlinx.coroutines.delay(1500)
       showSuccessOverlay = false
     }

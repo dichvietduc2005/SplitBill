@@ -3,6 +3,7 @@ package com.splitbill.routes
 import com.splitbill.exceptions.ValidationException
 import com.splitbill.models.*
 import com.splitbill.service.GroupService
+import com.splitbill.service.ActivityService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -16,7 +17,7 @@ import org.koin.ktor.ext.inject
  * Group Routes — gọn gàng, chỉ nhận request → gọi service → trả response.
  * Logic nghiệp vụ nằm trong GroupService.
  */
-fun Route.groupRoutes(groupService: GroupService) {
+fun Route.groupRoutes(groupService: GroupService, activityService: ActivityService) {
 
     route("/groups") {
 
@@ -70,6 +71,17 @@ fun Route.groupRoutes(groupService: GroupService) {
                 ?: throw ValidationException("Thiếu ID nhóm")
             val responses = groupService.getMembers(groupId, userId)
             call.respond(HttpStatusCode.OK, responses)
+        }
+
+        // GET /groups/{id}/activities - Lấy lịch sử hoạt động nhóm (phân trang)
+        get("/{id}/activities") {
+            val userId = call.currentUserId()
+            val groupId = call.parameters["id"]
+                ?: throw ValidationException("Thiếu ID nhóm")
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+            val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
+            val response = activityService.getActivitiesForGroup(groupId, userId, limit, offset)
+            call.respond(HttpStatusCode.OK, response)
         }
     }
 }

@@ -16,7 +16,8 @@ class SettlementRepository(private val tokenManager: TokenManager) {
     groupId: String,
     toUserId: String,
     amount: Double,
-    note: String?
+    note: String?,
+    fromUserId: String? = null
   ): Result<SettlementResponse> {
     return try {
       val response: SettlementResponse = getClient().post("/api/settlements") {
@@ -25,7 +26,8 @@ class SettlementRepository(private val tokenManager: TokenManager) {
             groupId = groupId,
             toUserId = toUserId,
             amount = amount,
-            note = note
+            note = note,
+            fromUserId = fromUserId
           )
         )
       }.body()

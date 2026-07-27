@@ -13,6 +13,8 @@ data class Bill(
     val paidByUserId: String,
     val currency: String,
     val exchangeRate: BigDecimal,
+    val receiptUrl: String? = null,
+    val isPaid: Boolean = false,
     val createdAt: String
 )
 
@@ -158,6 +160,20 @@ class BillRepository {
         Bills.deleteWhere { Bills.id eq uuid } > 0
     }
 
+    suspend fun updateReceiptUrl(billId: String, receiptUrl: String): Boolean = DatabaseFactory.dbQuery {
+        val uuid = UUID.fromString(billId)
+        Bills.update({ Bills.id eq uuid }) {
+            it[Bills.receiptUrl] = receiptUrl
+        } > 0
+    }
+
+    suspend fun updateBillPaidStatus(billId: String, isPaid: Boolean): Boolean = DatabaseFactory.dbQuery {
+        val uuid = UUID.fromString(billId)
+        Bills.update({ Bills.id eq uuid }) {
+            it[Bills.isPaid] = isPaid
+        } > 0
+    }
+
     private fun resultRowToBill(row: ResultRow) = Bill(
         id = row[Bills.id].toString(),
         groupId = row[Bills.groupId].toString(),
@@ -166,6 +182,8 @@ class BillRepository {
         paidByUserId = row[Bills.paidByUserId].toString(),
         currency = row[Bills.currency],
         exchangeRate = row[Bills.exchangeRate],
+        receiptUrl = row[Bills.receiptUrl],
+        isPaid = row[Bills.isPaid],
         createdAt = row[Bills.createdAt].toString()
     )
 }

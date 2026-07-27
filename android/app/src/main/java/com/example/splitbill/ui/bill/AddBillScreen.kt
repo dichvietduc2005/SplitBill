@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -75,6 +76,18 @@ fun AddBillScreen(
   var splitMode by rememberSaveable { mutableStateOf(SplitMode.EQUAL) }
   var payerDropdownExpanded by remember { mutableStateOf(false) }
   var showSuccessOverlay by remember { mutableStateOf(false) }
+
+  var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+  var imageBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+  val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+    contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+  ) { uri ->
+    if (uri != null) {
+      selectedImageUri = uri
+      imageBytes = compressReceiptImage(context, uri)
+    }
+  }
 
   var selectedCurrency by rememberSaveable(existingBill) { mutableStateOf(existingBill?.currency ?: "VND") }
   var exchangeRateText by rememberSaveable(existingBill) { 
@@ -169,8 +182,11 @@ fun AddBillScreen(
   val sumPercentages = members.sumOf { splitPercentages[it.userId]?.toDoubleOrNull() ?: 0.0 }
   val percentageWarning = splitMode == SplitMode.PERCENTAGE && kotlin.math.abs(sumPercentages - 100.0) > 0.01
 
+  val view = androidx.compose.ui.platform.LocalView.current
   val settingsManager = remember { com.example.splitbill.data.SettingsManager(context) }
   val pushEnabled by settingsManager.pushEnabled.collectAsState(initial = true)
+  val hapticEnabled by settingsManager.hapticEnabled.collectAsState(initial = true)
+  val soundEnabled by settingsManager.soundEnabled.collectAsState(initial = true)
   val pushGroupName = "Chia hóa đơn".localized()
 
   // Navigate back on success after a short animation delay
@@ -178,6 +194,13 @@ fun AddBillScreen(
     if (uiState is AddBillUiState.Success) {
       showSuccessOverlay = true
       
+      if (hapticEnabled) {
+        com.example.splitbill.utils.HapticManager.triggerSuccess(view)
+      }
+      if (soundEnabled) {
+        com.example.splitbill.utils.SoundManager.playSuccessSound()
+      }
+
       if (pushEnabled) {
         com.example.splitbill.utils.NotificationHelper.showBillNotification(
           context = context,
@@ -187,7 +210,7 @@ fun AddBillScreen(
         )
       }
       
-      kotlinx.coroutines.delay(1200) // Show success animation briefly
+      kotlinx.coroutines.delay(400) // Fast navigation back
       onNavigateBack()
       viewModel.resetState()
     }
@@ -610,6 +633,88 @@ fun AddBillScreen(
           }
         }
 
+        // --- Receipt Picker Card ---
+        item {
+          var visible by rememberSaveable { mutableStateOf(false) }
+          LaunchedEffect(Unit) { kotlinx.coroutines.delay(6 * Motion.StaggerDelay); visible = true }
+          AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(6)) {
+            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+              Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)) {
+                Text(
+                  text = "Ảnh hóa đơn".localized(),
+                  fontWeight = FontWeight.Bold,
+                  style = MaterialTheme.typography.titleMedium
+                )
+                
+                if (imageBytes != null) {
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(200.dp)
+                      .clip(RoundedCornerShape(12.dp))
+                      .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    coil3.compose.AsyncImage(
+                      model = selectedImageUri ?: imageBytes,
+                      contentDescription = "Receipt Preview",
+                      modifier = Modifier.fillMaxSize(),
+                      contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                    
+                    IconButton(
+                      onClick = {
+                        imageBytes = null
+                        selectedImageUri = null
+                      },
+                      modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                    ) {
+                      Icon(Icons.Default.Close, contentDescription = "Xóa ảnh", tint = Color.White)
+                    }
+                  }
+                } else if (existingBill?.receiptUrl != null) {
+                  val fullUrl = com.example.splitbill.data.api.ApiService.BASE_URL + existingBill.receiptUrl
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(200.dp)
+                      .clip(RoundedCornerShape(12.dp))
+                      .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    coil3.compose.AsyncImage(
+                      model = fullUrl,
+                      contentDescription = "Receipt Image",
+                      modifier = Modifier.fillMaxSize(),
+                      contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                  }
+                } else {
+                  OutlinedButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(100.dp),
+                    shape = RoundedCornerShape(12.dp)
+                  ) {
+                    Column(
+                      horizontalAlignment = Alignment.CenterHorizontally,
+                      verticalArrangement = Arrangement.Center
+                    ) {
+                      Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(32.dp))
+                      Spacer(Modifier.height(Dimens.SpacingXS))
+                      Text("Chọn ảnh hóa đơn từ Thư viện".localized())
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // --- Submit Button ---
         item {
           var visible by rememberSaveable { mutableStateOf(false) }
@@ -626,9 +731,9 @@ fun AddBillScreen(
                     if (amount > 0) BillSplitItem(member.userId, amount) else null
                   }
                   if (isEditMode) {
-                    viewModel.updateBill(existingBill!!.id, description, total, selectedPayerId, selectedCurrency, rate, splits)
+                    viewModel.updateBill(existingBill!!.id, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes)
                   } else {
-                    viewModel.createBill(groupId, description, total, selectedPayerId, selectedCurrency, rate, splits)
+                    viewModel.createBill(groupId, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes)
                   }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -695,4 +800,28 @@ fun AddBillScreen(
 }
 
 enum class SplitMode { EQUAL, CUSTOM, PERCENTAGE, SHARES }
+
+private fun compressReceiptImage(context: android.content.Context, uri: android.net.Uri): ByteArray? {
+  return try {
+    val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+    val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream) ?: return null
+    
+    val maxDim = 800
+    val width = originalBitmap.width
+    val height = originalBitmap.height
+    val scale = Math.min(maxDim.toFloat() / width, maxDim.toFloat() / height).coerceAtMost(1.0f)
+    
+    val scaledWidth = (width * scale).toInt()
+    val scaledHeight = (height * scale).toInt()
+    val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
+    
+    val outputStream = java.io.ByteArrayOutputStream()
+    scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+    outputStream.toByteArray()
+  } catch (e: Exception) {
+    e.printStackTrace()
+    null
+  }
+}
+
 

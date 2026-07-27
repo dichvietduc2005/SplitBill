@@ -1,9 +1,6 @@
 package com.splitbill.data
 
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.*
 import java.util.UUID
 
 data class User(
@@ -15,7 +12,8 @@ data class User(
     // Thông tin ngân hàng cho VietQR
     val bankCode: String? = null,
     val accountNumber: String? = null,
-    val accountName: String? = null
+    val accountName: String? = null,
+    val fcmToken: String? = null
 )
 
 class UserRepository {
@@ -27,7 +25,8 @@ class UserRepository {
         avatarUrl = row[Users.avatarUrl],
         bankCode = row[Users.bankCode],
         accountNumber = row[Users.accountNumber],
-        accountName = row[Users.accountName]
+        accountName = row[Users.accountName],
+        fcmToken = row[Users.fcmToken]
     )
 
     suspend fun findUserById(id: String): User? = DatabaseFactory.dbQuery {
@@ -61,6 +60,13 @@ class UserRepository {
             .singleOrNull()
     }
 
+    suspend fun updateAvatarUrl(userId: String, avatarUrl: String?): Boolean = DatabaseFactory.dbQuery {
+        val updated = Users.update({ Users.id eq UUID.fromString(userId) }) {
+            it[Users.avatarUrl] = avatarUrl
+        }
+        updated > 0
+    }
+
     suspend fun updateBankInfo(userId: String, bankCode: String, accountNumber: String, accountName: String): Boolean = DatabaseFactory.dbQuery {
         val updated = Users.update({ Users.id eq UUID.fromString(userId) }) {
             it[Users.bankCode] = bankCode
@@ -68,5 +74,23 @@ class UserRepository {
             it[Users.accountName] = accountName
         }
         updated > 0
+    }
+
+    suspend fun updateFcmToken(userId: String, token: String?): Boolean = DatabaseFactory.dbQuery {
+        val updated = Users.update({ Users.id eq UUID.fromString(userId) }) {
+            it[Users.fcmToken] = token
+        }
+        updated > 0
+    }
+
+    suspend fun getFcmTokensForGroup(groupId: String, excludeUserId: String): List<String> = DatabaseFactory.dbQuery {
+        (Users innerJoin GroupMembers)
+            .select(Users.fcmToken)
+            .where {
+                (GroupMembers.groupId eq UUID.fromString(groupId)) and
+                (GroupMembers.userId neq UUID.fromString(excludeUserId)) and
+                (Users.fcmToken.isNotNull())
+            }
+            .mapNotNull { it[Users.fcmToken] }
     }
 }

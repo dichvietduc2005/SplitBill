@@ -69,6 +69,9 @@ dependencies {
     // Phase 3: Swagger / OpenAPI Documentation
     implementation("io.ktor:ktor-server-swagger-jvm")
 
+    // Firebase Admin SDK
+    implementation("com.google.firebase:firebase-admin:9.4.3")
+
     testImplementation("io.ktor:ktor-server-tests-jvm")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }

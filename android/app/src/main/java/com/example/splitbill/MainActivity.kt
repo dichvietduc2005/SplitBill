@@ -21,10 +21,35 @@ import com.example.splitbill.ui.localization.AppLanguage
 import com.example.splitbill.ui.localization.LocalAppLanguage
 
 import androidx.fragment.app.FragmentActivity
+import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import com.example.splitbill.data.FcmTokenManager
+import com.example.splitbill.data.TokenManager
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+      }
+    }
+
+    val tokenManager = TokenManager(applicationContext)
+    val fcmTokenManager = FcmTokenManager(tokenManager)
+    
+    com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+      if (task.isSuccessful) {
+        val token = task.result
+        if (token != null) {
+          lifecycleScope.launch {
+            fcmTokenManager.registerToken(token)
+          }
+        }
+      }
+    }
 
     enableEdgeToEdge()
     setContent {

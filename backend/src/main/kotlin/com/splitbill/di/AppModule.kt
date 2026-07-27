@@ -6,7 +6,9 @@ import com.splitbill.data.GroupRepository
 import com.splitbill.data.UserRepository
 import com.splitbill.data.SettlementRepository
 import com.splitbill.data.InviteRepository
+import com.splitbill.data.ActivityRepository
 import com.splitbill.service.AuthService
+import com.splitbill.service.ActivityService
 import com.splitbill.service.BillService
 import com.splitbill.service.GroupService
 import com.splitbill.service.ProfileService
@@ -33,16 +35,20 @@ val appModule = module {
     single { BillRepository() }
     single { SettlementRepository() }
     single { InviteRepository() }
+    single { ActivityRepository() }
 
     // JwtConfig — inject ApplicationEnvironment từ Koin's parameter
     single { JwtConfig(get()) }
 
     // Services
+    single { com.splitbill.service.FcmService(get()) }
+    single { com.splitbill.service.StorageService() }
     single { AuthService(get(), get()) }
-    single { GroupService(get(), get()) }
-    single { BillService(get(), get(), get(), get()) }
-    single { ProfileService(get()) }
-    single { SettlementService(get(), get(), get()) }
-    single { InviteService(get(), get(), get()) }
+    single { GroupService(get(), get(), get()) }
+    single { BillService(get(), get(), get(), get(), get(), get(), get()) }
+    single { ProfileService(get(), get()) }
+    single { SettlementService(get(), get(), get(), get(), get()) }
+    single { InviteService(get(), get(), get(), get(), get()) }
     single { StatsService(get(), get(), get()) }
+    single { ActivityService(get(), get()) }
 }

@@ -11,7 +11,8 @@ data class CreateSettlementRequest(
     val groupId: String,
     val toUserId: String, // Trả nợ cho ai
     val amount: Double,
-    val note: String? = null
+    val note: String? = null,
+    val fromUserId: String? = null // Optional: người trả nợ (nếu creditor ghi nhận hộ)
 )
 
 // ==========================================

@@ -72,4 +72,18 @@ class GroupRepository(private val tokenManager: TokenManager) {
       Result.failure(e)
     }
   }
+
+  suspend fun getActivities(groupId: String, limit: Int = 50, offset: Int = 0): Result<com.example.splitbill.data.api.PaginatedActivityResponse> {
+    return try {
+      val response: com.example.splitbill.data.api.PaginatedActivityResponse = getClient().get("/api/groups/$groupId/activities") {
+        url {
+          parameters.append("limit", limit.toString())
+          parameters.append("offset", offset.toString())
+        }
+      }.body()
+      Result.success(response)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
 }
