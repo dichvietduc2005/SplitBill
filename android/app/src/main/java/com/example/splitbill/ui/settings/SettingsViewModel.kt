@@ -62,6 +62,27 @@ class SettingsViewModel(
       initialValue = true
     )
 
+  val autoSettleEnabled: StateFlow<Boolean> = settingsManager.autoSettleEnabled
+    .stateIn(
+      scope = viewModelScope,
+      started = SharingStarted.WhileSubscribed(5000),
+      initialValue = false
+    )
+
+  val hapticEnabled: StateFlow<Boolean> = settingsManager.hapticEnabled
+    .stateIn(
+      scope = viewModelScope,
+      started = SharingStarted.WhileSubscribed(5000),
+      initialValue = true
+    )
+
+  val soundEnabled: StateFlow<Boolean> = settingsManager.soundEnabled
+    .stateIn(
+      scope = viewModelScope,
+      started = SharingStarted.WhileSubscribed(5000),
+      initialValue = true
+    )
+
   init {
     loadProfile()
   }
@@ -105,6 +126,24 @@ class SettingsViewModel(
   fun savePushEnabled(enabled: Boolean) {
     viewModelScope.launch {
       settingsManager.savePushEnabled(enabled)
+    }
+  }
+
+  fun saveAutoSettleEnabled(enabled: Boolean) {
+    viewModelScope.launch {
+      settingsManager.saveAutoSettleEnabled(enabled)
+    }
+  }
+
+  fun saveHapticEnabled(enabled: Boolean) {
+    viewModelScope.launch {
+      settingsManager.saveHapticEnabled(enabled)
+    }
+  }
+
+  fun saveSoundEnabled(enabled: Boolean) {
+    viewModelScope.launch {
+      settingsManager.saveSoundEnabled(enabled)
     }
   }
 
