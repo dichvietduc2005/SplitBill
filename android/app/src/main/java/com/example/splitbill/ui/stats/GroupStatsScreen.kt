@@ -72,12 +72,9 @@ fun GroupStatsScreen(
 
     when (val state = uiState) {
       is GroupStatsUiState.Loading -> {
-        Box(
-          modifier = Modifier.padding(paddingValues).fillMaxSize(),
-          contentAlignment = Alignment.Center
-        ) {
-          CircularProgressIndicator()
-        }
+        com.example.splitbill.ui.components.GroupStatsSkeleton(
+          modifier = Modifier.padding(paddingValues).fillMaxSize()
+        )
       }
       is GroupStatsUiState.Error -> {
         EmptyState(

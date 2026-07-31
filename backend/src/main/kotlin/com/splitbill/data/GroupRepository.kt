@@ -14,6 +14,7 @@ data class GroupMember(
     val userId: String,
     val username: String,
     val email: String,
+    val avatarUrl: String? = null,
     val joinedAt: String
 )
 
@@ -86,6 +87,7 @@ class GroupRepository {
                     userId = it[Users.id].toString(),
                     username = it[Users.username],
                     email = it[Users.email],
+                    avatarUrl = it[Users.avatarUrl],
                     joinedAt = it[GroupMembers.joinedAt].toString()
                 )
             }

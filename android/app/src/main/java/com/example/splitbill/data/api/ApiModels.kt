@@ -43,6 +43,7 @@ data class MemberResponse(
   val userId: String,
   val username: String,
   val email: String,
+  val avatarUrl: String? = null,
   val joinedAt: String
 )
 

@@ -19,7 +19,16 @@ class GroupService(
 ) {
 
     suspend fun createGroup(name: String, userId: String): GroupResponse {
-        val group = groupRepository.createGroup(name, userId)
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) {
+            throw com.splitbill.exceptions.ValidationException("Tên nhóm không được để trống")
+        }
+        val userGroups = groupRepository.getGroupsForUser(userId)
+        if (userGroups.any { it.name.equals(cleanName, ignoreCase = true) }) {
+            throw com.splitbill.exceptions.ValidationException("Bạn đã tham gia/tạo nhóm tên '$cleanName' rồi. Vui lòng chọn tên khác!")
+        }
+
+        val group = groupRepository.createGroup(cleanName, userId)
             ?: throw InternalException("Lỗi server khi tạo nhóm")
 
         val creatorUser = userRepository.findUserById(userId)
@@ -129,6 +138,7 @@ class GroupService(
                 userId = it.userId,
                 username = it.username,
                 email = it.email,
+                avatarUrl = it.avatarUrl,
                 joinedAt = it.joinedAt
             )
         }

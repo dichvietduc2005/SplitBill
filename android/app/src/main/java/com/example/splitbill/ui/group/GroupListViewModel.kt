@@ -20,7 +20,14 @@ class GroupListViewModel(
   private val groupRepository: GroupRepository,
   private val inviteRepository: InviteRepository
 ) : ViewModel() {
-  private val _uiState = MutableStateFlow<GroupListUiState>(GroupListUiState.Loading)
+
+  companion object {
+    private var cachedState: GroupListUiState? = null
+  }
+
+  private val _uiState = MutableStateFlow<GroupListUiState>(
+    cachedState ?: GroupListUiState.Loading
+  )
   val uiState: StateFlow<GroupListUiState> = _uiState.asStateFlow()
 
   init {
@@ -35,7 +42,9 @@ class GroupListViewModel(
     viewModelScope.launch {
       val result = groupRepository.getGroups()
       if (result.isSuccess) {
-        _uiState.value = GroupListUiState.Success(result.getOrDefault(emptyList()))
+        val newState = GroupListUiState.Success(result.getOrDefault(emptyList()))
+        _uiState.value = newState
+        cachedState = newState
       } else {
         _uiState.value = GroupListUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải nhóm")
       }

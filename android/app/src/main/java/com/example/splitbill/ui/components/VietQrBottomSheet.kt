@@ -402,6 +402,24 @@ fun VietQrBottomSheet(
           }
         }
 
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        // Nút chia sẻ ảnh mã QR duy nhất
+        Button(
+          onClick = {
+            shareVietQrImageOnly(context, qrImageUrl)
+          },
+          modifier = Modifier.fillMaxWidth().height(48.dp),
+          shape = MaterialTheme.shapes.medium,
+          colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary
+          )
+        ) {
+          Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(Dimens.SpacingS))
+          Text("Chia sẻ Ảnh Mã QR qua Zalo", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+        }
+
         // Thông báo đã copy
         AnimatedVisibility(visible = copiedField != null) {
           Row(
@@ -657,6 +675,94 @@ private fun CopyRow(
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+fun shareVietQrImageOnly(
+  context: Context,
+  qrImageUrl: String
+) {
+  Toast.makeText(context, "Đang tải ảnh VietQR gửi Zalo...", Toast.LENGTH_SHORT).show()
+  CoroutineScope(Dispatchers.IO).launch {
+    try {
+      val url = java.net.URL(qrImageUrl)
+      val connection = url.openConnection()
+      connection.connectTimeout = 5000
+      connection.readTimeout = 5000
+      val inputStream = connection.getInputStream()
+      val file = java.io.File(context.cacheDir, "vietqr_photo.png")
+      file.outputStream().use { output -> inputStream.copyTo(output) }
+
+      val contentUri: Uri = androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+      )
+
+      withContext(Dispatchers.Main) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+          type = "image/png"
+          putExtra(Intent.EXTRA_STREAM, contentUri)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(shareIntent, "Gửi ảnh mã QR qua Zalo:")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+      }
+    } catch (e: Exception) {
+      withContext(Dispatchers.Main) {
+        Toast.makeText(context, "Không thể tải ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+}
+
+fun shareVietQrImage(
+  context: Context,
+  qrImageUrl: String,
+  shareText: String
+) {
+  Toast.makeText(context, "Đang tải ảnh VietQR...", Toast.LENGTH_SHORT).show()
+  CoroutineScope(Dispatchers.IO).launch {
+    try {
+      val url = java.net.URL(qrImageUrl)
+      val connection = url.openConnection()
+      connection.connectTimeout = 5000
+      connection.readTimeout = 5000
+      val inputStream = connection.getInputStream()
+      val file = java.io.File(context.cacheDir, "vietqr_share.png")
+      file.outputStream().use { output ->
+        inputStream.copyTo(output)
+      }
+      
+      val contentUri: Uri = androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+      )
+      
+      withContext(Dispatchers.Main) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+          type = "image/png"
+          putExtra(Intent.EXTRA_STREAM, contentUri)
+          putExtra(Intent.EXTRA_TEXT, shareText)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(shareIntent, "Chia sẻ ảnh VietQR qua:")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+      }
+    } catch (e: Exception) {
+      withContext(Dispatchers.Main) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+          type = "text/plain"
+          putExtra(Intent.EXTRA_TEXT, "$shareText\n\n📷 Mã QR: $qrImageUrl")
+        }
+        val chooser = Intent.createChooser(shareIntent, "Chia sẻ thông tin qua:")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+      }
+    }
+  }
+}
 
 private fun copyToClipboard(context: Context, label: String, value: String) {
   val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

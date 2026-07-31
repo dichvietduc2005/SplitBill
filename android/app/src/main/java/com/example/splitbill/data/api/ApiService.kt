@@ -15,7 +15,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object ApiService {
-  const val BASE_URL = "http://192.168.1.6:8081"
+  const val BASE_URL = "http://192.168.1.5:8081"
 
   fun createClient(token: String? = null): HttpClient {
     return HttpClient(OkHttp) {

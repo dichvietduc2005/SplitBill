@@ -53,9 +53,7 @@ fun SettingsScreen(
   var showLogoutConfirm by remember { mutableStateOf(false) }
   var showLanguagePicker by remember { mutableStateOf(false) }
 
-  LaunchedEffect(Unit) {
-    viewModel.loadProfile()
-  }
+
 
   Scaffold(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,

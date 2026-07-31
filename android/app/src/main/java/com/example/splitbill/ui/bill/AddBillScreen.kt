@@ -37,6 +37,8 @@ import com.example.splitbill.ui.components.SplitBillCard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.splitbill.ui.components.ConfettiOverlay
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import java.util.Locale
 import com.example.splitbill.data.TokenManager
 
@@ -120,18 +122,33 @@ fun AddBillScreen(
     }
   }
 
-  // Auto-fill equal splits when amount changes
-  LaunchedEffect(totalAmountText, splitMode) {
+  // Auto-fill equal splits when amount, currency, exchange rate, or payer changes
+  LaunchedEffect(totalAmountText, splitMode, selectedCurrency, exchangeRateText, selectedPayerId) {
     if (splitMode == SplitMode.EQUAL && members.isNotEmpty()) {
       val total = totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
-      val perPerson = Math.floor(total / members.size)
-      val remainder = total - (perPerson * members.size)
+      val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
       
-      members.forEachIndexed { index, member ->
-        val finalAmount = if (index == 0) perPerson + remainder else perPerson
-        splitAmounts[member.userId] = if (finalAmount > 0) {
-          if (selectedCurrency == "VND") String.format(Locale.US, "%,d", finalAmount.toLong()) else String.format(Locale.US, "%.2f", finalAmount)
-        } else ""
+      if (selectedCurrency == "VND" || rate <= 1.0) {
+        val perPerson = Math.floor(total / members.size)
+        val remainder = total - (perPerson * members.size)
+        
+        members.forEach { member ->
+          val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == members.first())
+          val finalAmount = if (isPayer) perPerson + remainder else perPerson
+          splitAmounts[member.userId] = if (finalAmount > 0) String.format(Locale.US, "%,d", finalAmount.toLong()) else ""
+        }
+      } else {
+        // Cách 1: Quy đổi ra VNĐ trước rồi chia (Không bị lẻ cent USD)
+        val totalVnd = total * rate
+        val perPersonVnd = Math.floor(totalVnd / members.size)
+        val remainderVnd = totalVnd - (perPersonVnd * members.size)
+        
+        members.forEach { member ->
+          val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == members.first())
+          val finalVnd = if (isPayer) perPersonVnd + remainderVnd else perPersonVnd
+          val foreignAmount = finalVnd / rate
+          splitAmounts[member.userId] = if (foreignAmount > 0) String.format(Locale.US, "%.2f", foreignAmount) else ""
+        }
       }
     }
   }
@@ -422,7 +439,22 @@ fun AddBillScreen(
                   unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(payerDropdownExpanded) },
-                leadingIcon = { Icon(Icons.Rounded.Wallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                leadingIcon = {
+                  val selectedPayer = members.find { it.userId == selectedPayerId }
+                  if (selectedPayer != null && !selectedPayer.avatarUrl.isNullOrBlank()) {
+                    val avatarFullUrl = remember(selectedPayer.avatarUrl) {
+                      if (selectedPayer.avatarUrl.startsWith("http")) selectedPayer.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (selectedPayer.avatarUrl.startsWith("/")) "" else "/"}${selectedPayer.avatarUrl}"
+                    }
+                    coil3.compose.AsyncImage(
+                      model = avatarFullUrl,
+                      contentDescription = selectedPayer.username,
+                      modifier = Modifier.size(24.dp).clip(CircleShape),
+                      contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                  } else {
+                    Icon(Icons.Rounded.Wallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                  }
+                }
               )
               ExposedDropdownMenu(
                 expanded = payerDropdownExpanded,
@@ -436,7 +468,19 @@ fun AddBillScreen(
                       payerDropdownExpanded = false
                     },
                     leadingIcon = {
-                      Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                      if (!member.avatarUrl.isNullOrBlank()) {
+                        val avatarFullUrl = remember(member.avatarUrl) {
+                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                        }
+                        coil3.compose.AsyncImage(
+                          model = avatarFullUrl,
+                          contentDescription = member.username,
+                          modifier = Modifier.size(24.dp).clip(CircleShape),
+                          contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                      } else {
+                        com.example.splitbill.ui.components.GradientAvatar(name = member.username, size = 24.dp)
+                      }
                     }
                   )
                 }
@@ -465,7 +509,7 @@ fun AddBillScreen(
                   selected = splitMode == SplitMode.CUSTOM,
                   onClick = { splitMode = SplitMode.CUSTOM },
                   shape = SegmentedButtonDefaults.itemShape(index = 1, count = 4),
-                  label = { Text("Số tiền", fontWeight = FontWeight.Bold) }
+                  label = { Text("Tùy chỉnh", fontWeight = FontWeight.Bold) }
                 )
                 SegmentedButton(
                   selected = splitMode == SplitMode.PERCENTAGE,
@@ -480,14 +524,17 @@ fun AddBillScreen(
                   label = { Text("Phần", fontWeight = FontWeight.Bold) }
                 )
               }
-              if (percentageWarning) {
-                Text(
-                  text = "Tổng phần trăm hiện tại là ${String.format(Locale.US, "%.1f", sumPercentages)}% (phải bằng 100%)",
-                  color = MaterialTheme.colorScheme.error,
-                  style = MaterialTheme.typography.bodySmall,
-                  fontWeight = FontWeight.SemiBold,
-                  modifier = Modifier.padding(top = Dimens.SpacingS)
-                )
+              if (splitMode == SplitMode.PERCENTAGE) {
+                val sumPercentages = members.sumOf { splitPercentages[it.userId]?.toDoubleOrNull() ?: 0.0 }
+                if (java.lang.Math.abs(sumPercentages - 100.0) > 0.1) {
+                  Text(
+                    text = "Tổng phần trăm hiện tại là ${String.format(java.util.Locale.US, "%.1f", sumPercentages)}% (phải bằng 100%)",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = Dimens.SpacingS)
+                  )
+                }
               }
             }
           }
@@ -515,7 +562,19 @@ fun AddBillScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
               ) {
-                com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+                if (!member.avatarUrl.isNullOrBlank()) {
+                  val avatarFullUrl = remember(member.avatarUrl) {
+                    if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                  }
+                  coil3.compose.AsyncImage(
+                    model = avatarFullUrl,
+                    contentDescription = member.username,
+                    modifier = Modifier.size(40.dp).clip(CircleShape),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                  )
+                } else {
+                  com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+                }
                 Text(
                   member.username,
                   style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),

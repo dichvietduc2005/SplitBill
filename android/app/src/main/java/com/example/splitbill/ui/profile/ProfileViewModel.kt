@@ -19,7 +19,13 @@ class ProfileViewModel(
   private val profileRepository: ProfileRepository
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
+  companion object {
+    private var cachedState: ProfileUiState? = null
+  }
+
+  private val _uiState = MutableStateFlow<ProfileUiState>(
+    cachedState ?: ProfileUiState.Loading
+  )
   val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
   private val _saveState = MutableStateFlow<String?>(null)
@@ -30,13 +36,24 @@ class ProfileViewModel(
   }
 
   fun loadProfile() {
-    _uiState.value = ProfileUiState.Loading
+    // Only show loading skeleton on initial load to avoid flash when re-entering
+    if (_uiState.value !is ProfileUiState.Success) {
+      _uiState.value = ProfileUiState.Loading
+    }
     viewModelScope.launch {
       val result = profileRepository.getMyProfile()
-      _uiState.value = if (result.isSuccess) {
+      val newState = if (result.isSuccess) {
         ProfileUiState.Success(result.getOrNull()!!)
       } else {
-        ProfileUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải profile")
+        if (_uiState.value is ProfileUiState.Success) {
+          _uiState.value // Keep existing data on error
+        } else {
+          ProfileUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải profile")
+        }
+      }
+      _uiState.value = newState
+      if (newState is ProfileUiState.Success) {
+        cachedState = newState
       }
     }
   }
