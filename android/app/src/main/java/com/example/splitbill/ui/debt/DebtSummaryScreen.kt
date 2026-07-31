@@ -248,6 +248,9 @@ fun DebtSummaryScreen(
                   onSettleClick = {
                     showSettleConfirmDialog = debt
                     settlementNote = ""
+                  },
+                  onShareQrClick = {
+                    viewModel.shareQrImageForDebt(context, debt)
                   }
                 )
               }
@@ -368,8 +371,15 @@ fun DebtSummaryScreen(
 }
 
 @Composable
-private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: () -> Unit, onSettleClick: () -> Unit) {
+private fun DebtCard(
+  debt: SimplifiedDebt,
+  currentUserId: String,
+  onPayClick: () -> Unit,
+  onSettleClick: () -> Unit,
+  onShareQrClick: () -> Unit
+) {
   val isCreditor = debt.toUserId == currentUserId
+  val context = androidx.compose.ui.platform.LocalContext.current
 
   SplitBillCard(modifier = Modifier.fillMaxWidth()) {
     Column {
@@ -420,7 +430,8 @@ private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: ()
 
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
+        horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS),
+        verticalAlignment = Alignment.CenterVertically
       ) {
         // Nút QR Code
         Button(
@@ -454,6 +465,21 @@ private fun DebtCard(debt: SimplifiedDebt, currentUserId: String, onPayClick: ()
           Text(
             "Đã trả xong",
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+          )
+        }
+
+        // Nút Chia sẻ Ảnh QR ra ngoài cùng bên phải
+        IconButton(
+          onClick = onShareQrClick,
+          modifier = Modifier
+            .size(44.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+        ) {
+          Icon(
+            Icons.Default.Share,
+            contentDescription = "Chia sẻ Ảnh QR sang Zalo",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
           )
         }
       }

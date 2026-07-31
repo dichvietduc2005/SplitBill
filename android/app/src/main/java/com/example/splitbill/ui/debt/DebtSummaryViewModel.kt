@@ -26,7 +26,13 @@ class DebtSummaryViewModel(
   private val settlementRepository: SettlementRepository
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow<DebtSummaryUiState>(DebtSummaryUiState.Loading)
+  companion object {
+    private val stateCache = mutableMapOf<String, DebtSummaryUiState>()
+  }
+
+  private val _uiState = MutableStateFlow<DebtSummaryUiState>(
+    stateCache[groupId] ?: DebtSummaryUiState.Loading
+  )
   val uiState: StateFlow<DebtSummaryUiState> = _uiState.asStateFlow()
 
   // State cho VietQR bottom sheet: khoản nợ đang chọn + profile người nhận
@@ -60,10 +66,14 @@ class DebtSummaryViewModel(
     }
     viewModelScope.launch {
       val result = billRepository.getDebtsForGroup(groupId)
-      _uiState.value = if (result.isSuccess) {
+      val newState = if (result.isSuccess) {
         DebtSummaryUiState.Success(result.getOrNull()!!)
       } else {
         DebtSummaryUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải dữ liệu nợ")
+      }
+      _uiState.value = newState
+      if (newState is DebtSummaryUiState.Success) {
+        stateCache[groupId] = newState
       }
     }
   }
@@ -90,6 +100,30 @@ class DebtSummaryViewModel(
         onSuccess()
         loadDebts() // Reload debts list
       }
+    }
+  }
+
+  /** Bấm nút chia sẻ trực tiếp trên thẻ nợ -> Tải ảnh QR và mở Zalo gửi ảnh */
+  fun shareQrImageForDebt(context: android.content.Context, debt: SimplifiedDebt) {
+    viewModelScope.launch {
+      val profileResult = profileRepository.getUserProfile(debt.toUserId)
+      val creditorProfile = profileResult.getOrNull()
+      if (creditorProfile?.bankCode == null || creditorProfile.accountNumber == null) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+          android.widget.Toast.makeText(context, "${debt.toUsername} chưa thiết lập tài khoản ngân hàng VietQR!", android.widget.Toast.LENGTH_LONG).show()
+        }
+        return@launch
+      }
+      
+      val rawBankCode = creditorProfile.bankCode
+      val bankCode = if (rawBankCode.uppercase() == "CTG") "ICB" else rawBankCode
+      val accountNumber = creditorProfile.accountNumber
+      val accountName = creditorProfile.accountName ?: creditorProfile.username
+      val amountLong = debt.amount.toLong()
+      val description = "SPLITBILL ${debt.fromUsername} tra no ${debt.toUsername}"
+      
+      val qrImageUrl = com.example.splitbill.ui.components.buildVietQrImageUrl(bankCode, accountNumber, accountName, amountLong, description)
+      com.example.splitbill.ui.components.shareVietQrImageOnly(context, qrImageUrl)
     }
   }
 }

@@ -83,7 +83,13 @@ class SettingsViewModel(
       initialValue = true
     )
 
+  companion object {
+    private var cachedProfileState: SettingsProfileUiState? = null
+  }
+
   init {
+    // Khôi phục từ cache nếu có
+    cachedProfileState?.let { _profileUiState.value = it }
     loadProfile()
   }
 
@@ -92,8 +98,10 @@ class SettingsViewModel(
       val result = profileRepository.getMyProfile()
       if (result.isSuccess) {
         val profile = result.getOrNull()!!
-        _profileUiState.value = SettingsProfileUiState.Success(profile.username, profile.email)
-      } else {
+        val newState = SettingsProfileUiState.Success(profile.username, profile.email)
+        _profileUiState.value = newState
+        cachedProfileState = newState
+      } else if (_profileUiState.value is SettingsProfileUiState.Loading) {
         _profileUiState.value = SettingsProfileUiState.Error
       }
     }

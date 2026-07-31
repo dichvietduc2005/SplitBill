@@ -33,11 +33,19 @@ class GroupDetailViewModel(
   private val inviteRepository: InviteRepository
 ) : ViewModel() {
 
-  private val _state = MutableStateFlow(GroupDetailState())
+  companion object {
+    /** Bộ nhớ đệm tĩnh: giữ state cũ để hiện tức thì khi quay lại trang */
+    private val stateCache = mutableMapOf<String, GroupDetailState>()
+  }
+
+  private val _state = MutableStateFlow(
+    // Khôi phục từ cache ngay lập tức nếu có → không hiện skeleton
+    stateCache[groupId]?.copy(isLoading = false) ?: GroupDetailState()
+  )
   val state: StateFlow<GroupDetailState> = _state.asStateFlow()
 
   init {
-    loadAll()
+    loadAll() // Refresh ngầm trong nền
     viewModelScope.launch {
       NotificationEventBus.events.collect { event ->
         if (event.groupId == groupId) {
@@ -48,7 +56,7 @@ class GroupDetailViewModel(
   }
 
   fun loadAll() {
-    // Only show loading skeleton on initial load (when group detail is empty) to prevent layout flickering
+    // Chỉ hiện skeleton khi chưa có data nào (lần đầu hoàn toàn)
     if (_state.value.group == null) {
       _state.value = _state.value.copy(isLoading = true, error = null)
     }
@@ -65,7 +73,7 @@ class GroupDetailViewModel(
       val membersList = membersResult.getOrElse { _state.value.members }
       val billsList = billsResult.getOrElse { _state.value.bills }
 
-      _state.value = _state.value.copy(
+      val newState = _state.value.copy(
         isLoading = false,
         group = groupResult.getOrNull() ?: _state.value.group,
         members = membersList,
@@ -73,6 +81,8 @@ class GroupDetailViewModel(
         memberBalances = computeBalances(billsList, membersList),
         error = if (groupResult.isFailure && _state.value.group == null) groupResult.exceptionOrNull()?.message else null
       )
+      _state.value = newState
+      stateCache[groupId] = newState // Lưu vào cache
     }
   }
 
@@ -81,11 +91,16 @@ class GroupDetailViewModel(
     members.forEach { balances[it.userId] = 0.0 }
     
     bills.forEach { bill ->
-      // Người trả tiền ĐƯỢC nhóm nợ → balance TĂNG
-      balances[bill.paidByUserId] = (balances[bill.paidByUserId] ?: 0.0) + bill.totalAmount
-      // Mỗi người trong splits NỢ nhóm → balance GIẢM
+      val rate = if (bill.exchangeRate > 0) bill.exchangeRate else 1.0
+      val totalVnd = bill.totalAmount * rate
+      
+      // Người trả tiền ĐƯỢC nhóm nợ → balance TĂNG (VND)
+      balances[bill.paidByUserId] = (balances[bill.paidByUserId] ?: 0.0) + totalVnd
+      
+      // Mỗi người trong splits NỢ nhóm → balance GIẢM (VND)
       bill.splits.forEach { split ->
-        balances[split.userId] = (balances[split.userId] ?: 0.0) - split.amountOwed
+        val splitVnd = split.amountOwed * rate
+        balances[split.userId] = (balances[split.userId] ?: 0.0) - splitVnd
       }
     }
     return balances

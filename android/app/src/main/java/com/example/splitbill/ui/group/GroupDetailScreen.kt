@@ -72,16 +72,11 @@ fun GroupDetailScreen(
   var showMembersSheet by remember { mutableStateOf(false) }
   var showGroupInfoDialog by remember { mutableStateOf(false) }
 
-  // Auto-refresh khi signal thay đổi
+  // Auto-refresh khi signal thay đổi (quay lại từ AddBill)
   LaunchedEffect(refreshSignal) {
     if (refreshSignal > 0) {
-      viewModel.loadAll()
+      viewModel.refreshBills()
     }
-  }
-
-  // Luôn làm mới dữ liệu khi vào màn hình
-  LaunchedEffect(Unit) {
-    viewModel.loadAll()
   }
 
   val snackbarHostState = remember { SnackbarHostState() }
@@ -186,7 +181,7 @@ fun GroupDetailScreen(
             enter = Motion.slideUp
           ) {
             HeroSummaryCard(
-              totalSpent = state.bills.sumOf { it.totalAmount },
+              totalSpent = state.bills.sumOf { it.totalAmount * (if (it.exchangeRate > 0) it.exchangeRate else 1.0) },
               memberCount = state.members.size,
               billCount = state.bills.size
             )
@@ -755,7 +750,21 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth()
     ) {
-      com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+      if (!member.avatarUrl.isNullOrBlank()) {
+        val avatarFullUrl = remember(member.avatarUrl) {
+          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+        }
+        AsyncImage(
+          model = avatarFullUrl,
+          contentDescription = member.username,
+          modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape),
+          contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
+      } else {
+        com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+      }
       Spacer(Modifier.width(Dimens.SpacingM))
       Column(modifier = Modifier.weight(1f)) {
         Text(member.username, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
@@ -898,6 +907,14 @@ private fun BillCard(
         }
         Column(horizontalAlignment = Alignment.End) {
           AmountText(amount = bill.totalAmount, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), currency = bill.currency)
+          if (bill.currency != "VND" && bill.exchangeRate > 1.0) {
+            val vndEquivalent = bill.totalAmount * bill.exchangeRate
+            Text(
+              "≈ ${java.text.NumberFormat.getCurrencyInstance(java.util.Locale("vi", "VN")).format(vndEquivalent)}",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.primary
+            )
+          }
         }
       }
 
@@ -930,9 +947,19 @@ private fun BillCard(
           }
           Spacer(Modifier.height(Dimens.SpacingXS))
           bill.splits.forEach { split ->
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
               Text(split.username, style = MaterialTheme.typography.bodySmall)
-              AmountText(amount = split.amountOwed, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), currency = bill.currency)
+              Column(horizontalAlignment = Alignment.End) {
+                AmountText(amount = split.amountOwed, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), currency = bill.currency)
+                if (bill.currency != "VND" && bill.exchangeRate > 1.0) {
+                  val splitVnd = split.amountOwed * bill.exchangeRate
+                  Text(
+                    "≈ ${java.text.NumberFormat.getCurrencyInstance(java.util.Locale("vi", "VN")).format(splitVnd)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
+              }
             }
           }
           if (bill.receiptUrl != null) {

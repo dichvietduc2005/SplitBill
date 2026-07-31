@@ -105,7 +105,37 @@ class BillService(
         val bills = billRepository.getBillsForGroup(groupId, limit, offset)
         val total = billRepository.countBillsForGroup(groupId)
 
-        val responses = bills.map { toBillResponse(it) }
+        // Bulk load members & splits in 2 queries instead of 350+ queries (N+1 optimization)
+        val members = groupRepository.getMembers(groupId)
+        val memberMap = members.associate { it.userId to it.username }
+        val allSplitsGrouped = billRepository.getAllSplitsForGroup(groupId).groupBy { it.billId }
+
+        val responses = bills.map { bill ->
+            val paidByUsername = memberMap[bill.paidByUserId] ?: "Unknown"
+            val splits = allSplitsGrouped[bill.id] ?: emptyList()
+            val splitResponses = splits.map { s ->
+                BillSplitResponse(
+                    userId = s.userId,
+                    username = memberMap[s.userId] ?: "Unknown",
+                    amountOwed = s.amountOwed.toDouble()
+                )
+            }
+            BillResponse(
+                id = bill.id,
+                groupId = bill.groupId,
+                description = bill.description,
+                totalAmount = bill.totalAmount.toDouble(),
+                paidByUserId = bill.paidByUserId,
+                paidByUsername = paidByUsername,
+                currency = bill.currency,
+                exchangeRate = bill.exchangeRate.toDouble(),
+                receiptUrl = bill.receiptUrl,
+                isPaid = bill.isPaid,
+                splits = splitResponses,
+                createdAt = bill.createdAt
+            )
+        }
+
         return PaginatedBillResponse(
             data = responses,
             total = total,

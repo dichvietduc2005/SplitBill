@@ -58,7 +58,7 @@ fun ActivityFeedScreen(
     ) {
       when (val state = uiState) {
         is ActivityFeedUiState.Loading -> {
-          LoadingState(modifier = Modifier.fillMaxSize())
+          com.example.splitbill.ui.components.ActivityFeedSkeleton(modifier = Modifier.fillMaxSize())
         }
         is ActivityFeedUiState.Error -> {
           Box(

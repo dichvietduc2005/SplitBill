@@ -24,7 +24,13 @@ class GroupStatsViewModel(
   private val billRepository: BillRepository
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow<GroupStatsUiState>(GroupStatsUiState.Loading)
+  companion object {
+    private val stateCache = mutableMapOf<String, GroupStatsUiState>()
+  }
+
+  private val _uiState = MutableStateFlow<GroupStatsUiState>(
+    stateCache[groupId] ?: GroupStatsUiState.Loading
+  )
   val uiState: StateFlow<GroupStatsUiState> = _uiState.asStateFlow()
 
   init {
@@ -32,13 +38,23 @@ class GroupStatsViewModel(
   }
 
   fun loadGroupStats() {
-    _uiState.value = GroupStatsUiState.Loading
+    if (_uiState.value !is GroupStatsUiState.Success) {
+      _uiState.value = GroupStatsUiState.Loading
+    }
     viewModelScope.launch {
       val result = statsRepository.getGroupStats(groupId)
-      if (result.isSuccess) {
-        _uiState.value = GroupStatsUiState.Success(result.getOrNull()!!)
+      val newState = if (result.isSuccess) {
+        GroupStatsUiState.Success(result.getOrNull()!!)
       } else {
-        _uiState.value = GroupStatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê nhóm")
+        if (_uiState.value is GroupStatsUiState.Success) {
+          _uiState.value
+        } else {
+          GroupStatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê nhóm")
+        }
+      }
+      _uiState.value = newState
+      if (newState is GroupStatsUiState.Success) {
+        stateCache[groupId] = newState
       }
     }
   }

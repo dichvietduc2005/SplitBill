@@ -20,7 +20,13 @@ class ActivityFeedViewModel(
   private val groupId: String
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow<ActivityFeedUiState>(ActivityFeedUiState.Loading)
+  companion object {
+    private val stateCache = mutableMapOf<String, ActivityFeedUiState>()
+  }
+
+  private val _uiState = MutableStateFlow<ActivityFeedUiState>(
+    stateCache[groupId] ?: ActivityFeedUiState.Loading
+  )
   val uiState: StateFlow<ActivityFeedUiState> = _uiState.asStateFlow()
 
   init {
@@ -28,14 +34,24 @@ class ActivityFeedViewModel(
   }
 
   fun loadActivities() {
-    _uiState.value = ActivityFeedUiState.Loading
+    if (_uiState.value !is ActivityFeedUiState.Success) {
+      _uiState.value = ActivityFeedUiState.Loading
+    }
     viewModelScope.launch {
       val result = groupRepository.getActivities(groupId, limit = 100, offset = 0)
-      if (result.isSuccess) {
+      val newState = if (result.isSuccess) {
         val paginatedResponse = result.getOrNull()!!
-        _uiState.value = ActivityFeedUiState.Success(paginatedResponse.data)
+        ActivityFeedUiState.Success(paginatedResponse.data)
       } else {
-        _uiState.value = ActivityFeedUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải lịch sử hoạt động")
+        if (_uiState.value is ActivityFeedUiState.Success) {
+          _uiState.value
+        } else {
+          ActivityFeedUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải lịch sử hoạt động")
+        }
+      }
+      _uiState.value = newState
+      if (newState is ActivityFeedUiState.Success) {
+        stateCache[groupId] = newState
       }
     }
   }
