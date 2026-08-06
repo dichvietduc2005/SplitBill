@@ -135,6 +135,7 @@ object Bills : Table("bills") {
     val paidByUserId = reference("paid_by_user_id", Users.id)
     val currency = varchar("currency", 3).default("VND")
     val exchangeRate = decimal("exchange_rate", 15, 6).default(java.math.BigDecimal.ONE)
+    val category = varchar("category", 50).default("GENERAL")
     val receiptUrl = varchar("receipt_url", 500).nullable()
     val isPaid = bool("is_paid").default(false)
     val createdAt = datetime("created_at").clientDefault { LocalDateTime.now() }

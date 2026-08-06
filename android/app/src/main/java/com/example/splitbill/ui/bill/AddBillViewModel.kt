@@ -31,7 +31,8 @@ class AddBillViewModel(
     currency: String,
     exchangeRate: Double,
     splits: List<BillSplitItem>,
-    receiptBytes: ByteArray? = null
+    receiptBytes: ByteArray? = null,
+    category: String = "GENERAL"
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -53,7 +54,7 @@ class AddBillViewModel(
 
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
-      val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
+      val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, currency, exchangeRate, splits, category)
       if (result.isSuccess) {
         val bill = result.getOrNull()
         if (bill != null && receiptBytes != null) {
@@ -80,7 +81,8 @@ class AddBillViewModel(
     currency: String,
     exchangeRate: Double,
     splits: List<BillSplitItem>,
-    receiptBytes: ByteArray? = null
+    receiptBytes: ByteArray? = null,
+    category: String = "GENERAL"
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -102,7 +104,7 @@ class AddBillViewModel(
 
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
-      val result = billRepository.updateBill(billId, description, totalAmount, paidByUserId, currency, exchangeRate, splits)
+      val result = billRepository.updateBill(billId, description, totalAmount, paidByUserId, currency, exchangeRate, splits, category)
       if (result.isSuccess) {
         val bill = result.getOrNull()
         if (bill != null && receiptBytes != null) {

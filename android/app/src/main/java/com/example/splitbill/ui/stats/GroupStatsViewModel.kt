@@ -18,6 +18,12 @@ sealed interface GroupStatsUiState {
   data class Error(val message: String) : GroupStatsUiState
 }
 
+data class CategorySpending(
+  val categoryKey: String,
+  val totalAmount: Double,
+  val percentage: Float
+)
+
 class GroupStatsViewModel(
   val groupId: String,
   private val statsRepository: StatsRepository,
@@ -32,6 +38,9 @@ class GroupStatsViewModel(
     stateCache[groupId] ?: GroupStatsUiState.Loading
   )
   val uiState: StateFlow<GroupStatsUiState> = _uiState.asStateFlow()
+
+  private val _categoryBreakdown = MutableStateFlow<List<CategorySpending>>(emptyList())
+  val categoryBreakdown: StateFlow<List<CategorySpending>> = _categoryBreakdown.asStateFlow()
 
   init {
     loadGroupStats()
@@ -55,6 +64,26 @@ class GroupStatsViewModel(
       _uiState.value = newState
       if (newState is GroupStatsUiState.Success) {
         stateCache[groupId] = newState
+      }
+
+      // Calculate Category Breakdown
+      val billsResult = billRepository.getBillsForGroup(groupId)
+      if (billsResult.isSuccess) {
+        val bills = billsResult.getOrNull() ?: emptyList()
+        val totalGroupSpent = bills.sumOf { it.totalAmount }
+        if (totalGroupSpent > 0) {
+          val breakdown = bills.groupBy { it.category }
+            .map { (catKey, catBills) ->
+              val catTotal = catBills.sumOf { it.totalAmount }
+              CategorySpending(
+                categoryKey = catKey,
+                totalAmount = catTotal,
+                percentage = ((catTotal / totalGroupSpent) * 100).toFloat()
+              )
+            }
+            .sortedByDescending { it.totalAmount }
+          _categoryBreakdown.value = breakdown
+        }
       }
     }
   }

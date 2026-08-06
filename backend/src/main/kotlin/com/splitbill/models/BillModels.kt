@@ -14,6 +14,7 @@ data class CreateBillRequest(
     val paidByUserId: String,       // UUID của người đã trả tiền
     val currency: String = "VND",
     val exchangeRate: Double = 1.0,
+    val category: String = "GENERAL",
     val splits: List<BillSplitItem> // Danh sách ai nợ bao nhiêu
 )
 
@@ -30,6 +31,7 @@ data class UpdateBillRequest(
     val paidByUserId: String,
     val currency: String = "VND",
     val exchangeRate: Double = 1.0,
+    val category: String = "GENERAL",
     val splits: List<BillSplitItem>
 )
 
@@ -47,6 +49,7 @@ data class BillResponse(
     val paidByUsername: String,
     val currency: String,
     val exchangeRate: Double,
+    val category: String = "GENERAL",
     val receiptUrl: String? = null,
     val isPaid: Boolean = false,
     val splits: List<BillSplitResponse>,

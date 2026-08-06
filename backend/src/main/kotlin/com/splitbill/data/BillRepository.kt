@@ -13,6 +13,7 @@ data class Bill(
     val paidByUserId: String,
     val currency: String,
     val exchangeRate: BigDecimal,
+    val category: String = "GENERAL",
     val receiptUrl: String? = null,
     val isPaid: Boolean = false,
     val createdAt: String
@@ -34,6 +35,7 @@ class BillRepository {
         paidByUserId: String,
         currency: String,
         exchangeRate: Double,
+        category: String = "GENERAL",
         splits: List<Pair<String, Double>> // List<Pair<userId, amountOwed>>
     ): Bill? = DatabaseFactory.dbQuery {
         val billId = UUID.fromString(
@@ -44,6 +46,7 @@ class BillRepository {
                 it[Bills.paidByUserId] = UUID.fromString(paidByUserId)
                 it[Bills.currency] = currency
                 it[Bills.exchangeRate] = BigDecimal.valueOf(exchangeRate)
+                it[Bills.category] = category
             }.resultedValues?.singleOrNull()?.get(Bills.id)?.toString()
                 ?: return@dbQuery null
         )
@@ -122,6 +125,7 @@ class BillRepository {
         paidByUserId: String,
         currency: String,
         exchangeRate: Double,
+        category: String = "GENERAL",
         splits: List<Pair<String, Double>> // List<Pair<userId, amountOwed>>
     ): Bill? = DatabaseFactory.dbQuery {
         val uuid = UUID.fromString(billId)
@@ -133,6 +137,7 @@ class BillRepository {
             it[Bills.paidByUserId] = UUID.fromString(paidByUserId)
             it[Bills.currency] = currency
             it[Bills.exchangeRate] = BigDecimal.valueOf(exchangeRate)
+            it[Bills.category] = category
         }
 
         // 2. Xóa các splits cũ
@@ -182,6 +187,7 @@ class BillRepository {
         paidByUserId = row[Bills.paidByUserId].toString(),
         currency = row[Bills.currency],
         exchangeRate = row[Bills.exchangeRate],
+        category = row[Bills.category],
         receiptUrl = row[Bills.receiptUrl],
         isPaid = row[Bills.isPaid],
         createdAt = row[Bills.createdAt].toString()

@@ -61,6 +61,7 @@ class BillService(
             paidByUserId = request.paidByUserId,
             currency = request.currency,
             exchangeRate = request.exchangeRate,
+            category = request.category,
             splits = splits
         ) ?: throw InternalException("Lỗi server khi tạo hóa đơn")
 
@@ -129,6 +130,7 @@ class BillService(
                 paidByUsername = paidByUsername,
                 currency = bill.currency,
                 exchangeRate = bill.exchangeRate.toDouble(),
+                category = bill.category,
                 receiptUrl = bill.receiptUrl,
                 isPaid = bill.isPaid,
                 splits = splitResponses,
@@ -176,6 +178,7 @@ class BillService(
             paidByUserId = request.paidByUserId,
             currency = request.currency,
             exchangeRate = request.exchangeRate,
+            category = request.category,
             splits = splits
         ) ?: throw InternalException("Lỗi server khi cập nhật hóa đơn")
 
@@ -364,6 +367,7 @@ class BillService(
             paidByUsername = paidByUser?.username ?: "Unknown",
             currency = bill.currency,
             exchangeRate = bill.exchangeRate.toDouble(),
+            category = bill.category,
             receiptUrl = bill.receiptUrl,
             isPaid = bill.isPaid,
             splits = splitResponses,
