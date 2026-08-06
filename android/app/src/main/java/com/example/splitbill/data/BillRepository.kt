@@ -38,7 +38,8 @@ class BillRepository(private val tokenManager: TokenManager) {
     paidByUserId: String,
     currency: String,
     exchangeRate: Double,
-    splits: List<BillSplitItem>
+    splits: List<BillSplitItem>,
+    category: String = "GENERAL"
   ): Result<BillResponse> {
     return try {
       val response: BillResponse = getClient().post("/api/bills") {
@@ -50,6 +51,7 @@ class BillRepository(private val tokenManager: TokenManager) {
             paidByUserId = paidByUserId,
             currency = currency,
             exchangeRate = exchangeRate,
+            category = category,
             splits = splits
           )
         )
@@ -67,7 +69,8 @@ class BillRepository(private val tokenManager: TokenManager) {
     paidByUserId: String,
     currency: String,
     exchangeRate: Double,
-    splits: List<BillSplitItem>
+    splits: List<BillSplitItem>,
+    category: String = "GENERAL"
   ): Result<BillResponse> {
     return try {
       val response: BillResponse = getClient().put("/api/bills/$billId") {
@@ -78,6 +81,7 @@ class BillRepository(private val tokenManager: TokenManager) {
             paidByUserId = paidByUserId,
             currency = currency,
             exchangeRate = exchangeRate,
+            category = category,
             splits = splits
           )
         )

@@ -79,6 +79,9 @@ fun AddBillScreen(
   var payerDropdownExpanded by remember { mutableStateOf(false) }
   var showSuccessOverlay by remember { mutableStateOf(false) }
 
+  var selectedCategory by rememberSaveable(existingBill) { mutableStateOf(existingBill?.category ?: "GENERAL") }
+  var showCategoryPicker by remember { mutableStateOf(false) }
+
   var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
   var imageBytes by remember { mutableStateOf<ByteArray?>(null) }
 
@@ -413,6 +416,21 @@ fun AddBillScreen(
               ),
               singleLine = true
             )
+          }
+        }
+
+        // --- Category Picker ---
+        item {
+          var visible by rememberSaveable { mutableStateOf(false) }
+          LaunchedEffect(Unit) { kotlinx.coroutines.delay((1.5 * Motion.StaggerDelay).toLong()); visible = true }
+          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
+            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
+              com.example.splitbill.ui.components.CategoryQuickPicker(
+                selectedCategory = com.example.splitbill.data.model.BillCategory.fromKey(selectedCategory),
+                onCategorySelected = { selectedCategory = it.key },
+                onShowAllCategories = { showCategoryPicker = true }
+              )
+            }
           }
         }
 
@@ -790,9 +808,9 @@ fun AddBillScreen(
                     if (amount > 0) BillSplitItem(member.userId, amount) else null
                   }
                   if (isEditMode) {
-                    viewModel.updateBill(existingBill!!.id, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes)
+                    viewModel.updateBill(existingBill!!.id, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes, selectedCategory)
                   } else {
-                    viewModel.createBill(groupId, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes)
+                    viewModel.createBill(groupId, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes, selectedCategory)
                   }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -854,6 +872,15 @@ fun AddBillScreen(
           }
         }
       }
+    }
+
+    // Category Picker Bottom Sheet
+    if (showCategoryPicker) {
+      com.example.splitbill.ui.components.CategoryPickerBottomSheet(
+        selectedCategory = com.example.splitbill.data.model.BillCategory.fromKey(selectedCategory),
+        onCategorySelected = { selectedCategory = it.key },
+        onDismiss = { showCategoryPicker = false }
+      )
     }
   }
 }

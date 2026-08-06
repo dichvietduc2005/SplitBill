@@ -43,6 +43,8 @@ fun GroupStatsScreen(
   val context = LocalContext.current
   var showExportSheet by remember { mutableStateOf(false) }
 
+  val categoryBreakdown by viewModel.categoryBreakdown.collectAsStateWithLifecycle()
+
   Scaffold(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
@@ -87,6 +89,7 @@ fun GroupStatsScreen(
       is GroupStatsUiState.Success -> {
         GroupStatsContent(
           stats = state.data,
+          categoryBreakdown = categoryBreakdown,
           modifier = Modifier
             .padding(paddingValues)
             .fillMaxSize()
@@ -99,6 +102,7 @@ fun GroupStatsScreen(
 @Composable
 private fun GroupStatsContent(
   stats: com.example.splitbill.data.api.GroupStatsResponse,
+  categoryBreakdown: List<CategorySpending>,
   modifier: Modifier = Modifier
 ) {
   LazyColumn(
@@ -296,6 +300,93 @@ private fun GroupStatsContent(
                     .clip(CircleShape),
                   color = MaterialTheme.colorScheme.primary,
                   trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Phân tích chi tiêu theo Danh mục
+    if (categoryBreakdown.isNotEmpty()) {
+      item {
+        Card(
+          shape = RoundedCornerShape(24.dp),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(Dimens.SpacingM)) {
+            Text(
+              "Chi tiêu theo danh mục",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(Dimens.SpacingM))
+
+            categoryBreakdown.forEach { catSpending ->
+              val category = com.example.splitbill.data.model.BillCategory.fromKey(catSpending.categoryKey)
+              val ratio = (catSpending.percentage / 100f).coerceIn(0f, 1f)
+              var animProgress by remember { mutableStateOf(0f) }
+              LaunchedEffect(ratio) {
+                animate(
+                  initialValue = 0f,
+                  targetValue = ratio,
+                  animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+                ) { value, _ ->
+                  animProgress = value
+                }
+              }
+
+              Column(modifier = Modifier.padding(vertical = Dimens.SpacingS)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                      modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(category.bgColor),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Icon(
+                        imageVector = category.icon,
+                        contentDescription = category.displayName,
+                        tint = category.iconColor,
+                        modifier = Modifier.size(16.dp)
+                      )
+                    }
+                    Spacer(Modifier.width(Dimens.SpacingS))
+                    Text(
+                      category.displayName,
+                      style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                  }
+                  Column(horizontalAlignment = Alignment.End) {
+                    AmountText(
+                      amount = catSpending.totalAmount,
+                      style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                      "${String.format(java.util.Locale.US, "%.1f", catSpending.percentage)}%",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                  }
+                }
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                  progress = { animProgress },
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape),
+                  color = category.iconColor,
+                  trackColor = category.bgColor
                 )
               }
             }

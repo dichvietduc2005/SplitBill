@@ -861,13 +861,14 @@ private fun BillCard(
             .padding(end = Dimens.SpacingM)
             .size(40.dp)
             .clip(CircleShape)
-            .background(customColors.badgeBillBg),
+            .background(com.example.splitbill.data.model.BillCategory.fromKey(bill.category).bgColor),
           contentAlignment = Alignment.Center
         ) {
+          val cat = com.example.splitbill.data.model.BillCategory.fromKey(bill.category)
           Icon(
-            imageVector = Icons.Default.Receipt,
+            imageVector = cat.icon,
             contentDescription = null,
-            tint = customColors.badgeBillIcon,
+            tint = cat.iconColor,
             modifier = Modifier.size(20.dp)
           )
         }
@@ -899,8 +900,13 @@ private fun BillCard(
           }
           Spacer(Modifier.height(2.dp))
           val formattedDate = formatCreatedDateTime(bill.createdAt)
+          val categoryName = com.example.splitbill.data.model.BillCategory.fromKey(bill.category).displayName
           Text(
-            if (formattedDate.isNotBlank()) "Trả bởi: ${bill.paidByUsername} • $formattedDate" else "Trả bởi: ${bill.paidByUsername}",
+            buildString {
+              append(categoryName)
+              append(" • Trả bởi: ${bill.paidByUsername}")
+              if (formattedDate.isNotBlank()) append(" • $formattedDate")
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
