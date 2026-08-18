@@ -8,7 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -331,7 +331,7 @@ fun LoginScreen(
                   modifier = Modifier.padding(Dimens.SpacingM),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                  Icon(Icons.Rounded.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                   Spacer(modifier = Modifier.width(Dimens.SpacingS))
                   Text(
                     text = (uiState as LoginUiState.Error).message.localized(),
@@ -349,7 +349,7 @@ fun LoginScreen(
               label = { Text("Tên đăng nhập".localized()) },
               leadingIcon = {
                 Icon(
-                  Icons.Default.Person,
+                  Icons.Rounded.Person,
                   contentDescription = null,
                   tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                 )
@@ -357,7 +357,7 @@ fun LoginScreen(
               trailingIcon = {
                 if (username.isNotEmpty()) {
                   IconButton(onClick = { username = "" }) {
-                    Icon(Icons.Default.Cancel, contentDescription = "Clear")
+                    Icon(Icons.Rounded.Cancel, contentDescription = "Clear")
                   }
                 }
               },
@@ -379,7 +379,7 @@ fun LoginScreen(
               label = { Text("Mật khẩu".localized()) },
               leadingIcon = {
                 Icon(
-                  Icons.Default.Lock,
+                  Icons.Rounded.Lock,
                   contentDescription = null,
                   tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                 )
@@ -387,7 +387,7 @@ fun LoginScreen(
               trailingIcon = {
                 IconButton(onClick = { showPassword = !showPassword }) {
                   Icon(
-                    imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    imageVector = if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                     contentDescription = "Show/Hide password"
                   )
                 }
@@ -469,7 +469,7 @@ fun LoginScreen(
                       )
                     ) {
                       Icon(
-                        imageVector = Icons.Default.Fingerprint,
+                        imageVector = Icons.Rounded.Fingerprint,
                         contentDescription = "Biometric login",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)

@@ -10,7 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Wallet
 import androidx.compose.material3.*
@@ -266,7 +266,7 @@ fun AddBillScreen(
               modifier = Modifier.fillMaxWidth()
             ) {
               Row(Modifier.padding(Dimens.SpacingM), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.width(Dimens.SpacingS))
                 Text(
                   (uiState as? AddBillUiState.Error)?.message ?: "",
@@ -676,7 +676,7 @@ fun AddBillScreen(
                           },
                           modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                         ) {
-                          Icon(Icons.Default.Remove, contentDescription = "Giảm", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                          Icon(Icons.Rounded.Remove, contentDescription = "Giảm", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
                         }
                         Text(
                           text = splitShares[member.userId] ?: "1",
@@ -691,7 +691,7 @@ fun AddBillScreen(
                           },
                           modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                         ) {
-                          Icon(Icons.Default.Add, contentDescription = "Tăng", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                          Icon(Icons.Rounded.Add, contentDescription = "Tăng", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
                         }
                       }
                       val amt = splitAmounts[member.userId] ?: ""
@@ -749,7 +749,7 @@ fun AddBillScreen(
                         .padding(8.dp)
                         .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                     ) {
-                      Icon(Icons.Default.Close, contentDescription = "Xóa ảnh", tint = Color.White)
+                      Icon(Icons.Rounded.Close, contentDescription = "Xóa ảnh", tint = Color.White)
                     }
                   }
                 } else if (existingBill?.receiptUrl != null) {
@@ -781,7 +781,7 @@ fun AddBillScreen(
                       horizontalAlignment = Alignment.CenterHorizontally,
                       verticalArrangement = Arrangement.Center
                     ) {
-                      Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(32.dp))
+                      Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(32.dp))
                       Spacer(Modifier.height(Dimens.SpacingXS))
                       Text("Chọn ảnh hóa đơn từ Thư viện".localized())
                     }
@@ -820,7 +820,7 @@ fun AddBillScreen(
                 if (uiState is AddBillUiState.Loading) {
                   CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = Color.White)
                 } else {
-                  Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                  Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color.White)
                   Spacer(Modifier.width(Dimens.SpacingS))
                   Text(if (isEditMode) "Cập nhật hóa đơn" else "Lưu hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
                 }
@@ -864,7 +864,7 @@ fun AddBillScreen(
         ) {
           Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(
-              Icons.Default.CheckCircle,
+              Icons.Rounded.CheckCircle,
               contentDescription = "Success",
               tint = MaterialTheme.colorScheme.primary,
               modifier = Modifier.size(80.dp)

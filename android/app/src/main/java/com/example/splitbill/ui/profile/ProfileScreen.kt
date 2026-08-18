@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -221,7 +221,7 @@ fun ProfileScreen(
                     ) {
                       Box(contentAlignment = Alignment.Center) {
                         Icon(
-                          imageVector = Icons.Default.Edit,
+                          imageVector = Icons.Rounded.Edit,
                           contentDescription = "Chỉnh sửa ảnh",
                           tint = androidx.compose.ui.graphics.Color.White,
                           modifier = Modifier.size(12.dp)
@@ -268,7 +268,7 @@ fun ProfileScreen(
                       contentAlignment = Alignment.Center
                     ) {
                       Icon(
-                        Icons.Default.QrCode2,
+                        Icons.Rounded.QrCode2,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(20.dp)
@@ -339,7 +339,7 @@ fun ProfileScreen(
                           Text(bankCode, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                       } else {
-                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Rounded.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.width(Dimens.SpacingM))
                         Text(
                           "Chọn Ngân Hàng",
@@ -348,7 +348,7 @@ fun ProfileScreen(
                           modifier = Modifier.weight(1f)
                         )
                       }
-                      Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                      Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                   }
                   
@@ -364,7 +364,7 @@ fun ProfileScreen(
                     value = accountNumber,
                     onValueChange = { accountNumber = it.filter { c -> c.isDigit() } },
                     label = { Text("Số tài khoản") },
-                    leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Rounded.CreditCard, contentDescription = null) },
                     placeholder = { Text("Nhập số tài khoản") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
@@ -377,7 +377,7 @@ fun ProfileScreen(
                     value = accountName,
                     onValueChange = { accountName = it.uppercase() },
                     label = { Text("Tên chủ tài khoản") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
                     placeholder = { Text("NGUYEN VAN A") },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                     singleLine = true,
@@ -414,7 +414,7 @@ fun ProfileScreen(
                       verticalAlignment = Alignment.CenterVertically
                     ) {
                       Icon(
-                        Icons.Default.CheckCircle,
+                        Icons.Rounded.CheckCircle,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                       )
@@ -439,7 +439,7 @@ fun ProfileScreen(
                   modifier = Modifier.fillMaxWidth().height(56.dp),
                   shape = MaterialTheme.shapes.medium
                 ) {
-                  Icon(Icons.Default.Save, contentDescription = null)
+                  Icon(Icons.Rounded.Save, contentDescription = null)
                   Spacer(Modifier.width(Dimens.SpacingS))
                   Text(
                     "Lưu thông tin",
@@ -495,7 +495,7 @@ fun BankSelectionBottomSheet(
         value = searchQuery,
         onValueChange = { searchQuery = it },
         placeholder = { Text("Tìm kiếm ngân hàng...") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         singleLine = true

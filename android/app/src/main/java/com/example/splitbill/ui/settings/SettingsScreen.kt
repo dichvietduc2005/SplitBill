@@ -8,9 +8,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -140,7 +140,7 @@ fun SettingsScreen(
                 ) {
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                      imageVector = Icons.Default.Palette,
+                      imageVector = Icons.Rounded.Palette,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary
                     )
@@ -213,7 +213,7 @@ fun SettingsScreen(
               ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(
-                    imageVector = Icons.Default.Language,
+                    imageVector = Icons.Rounded.Language,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                   )
@@ -233,7 +233,7 @@ fun SettingsScreen(
                   )
                   Spacer(Modifier.width(Dimens.SpacingXS))
                   Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                   )
@@ -251,7 +251,7 @@ fun SettingsScreen(
                 ) {
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                      imageVector = Icons.Default.FormatSize,
+                      imageVector = Icons.Rounded.FormatSize,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary
                     )
@@ -349,7 +349,7 @@ fun SettingsScreen(
                   contentAlignment = Alignment.Center
                 ) {
                   Icon(
-                    imageVector = Icons.Default.QrCode2,
+                    imageVector = Icons.Rounded.QrCode2,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(24.dp)
@@ -370,7 +370,7 @@ fun SettingsScreen(
                 }
               }
               Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
               )
@@ -401,7 +401,7 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingL)) {
               // Notification Toggle
               CustomSettingRow(
-                icon = Icons.Default.NotificationsActive,
+                icon = Icons.Rounded.NotificationsActive,
                 title = "Thông báo đẩy".localized(),
                 subtitle = "Bật thông báo khi có hóa đơn mới".localized(),
                 checked = pushEnabled,
@@ -412,7 +412,7 @@ fun SettingsScreen(
 
               // Biometric
               CustomSettingRow(
-                icon = Icons.Default.Fingerprint,
+                icon = Icons.Rounded.Fingerprint,
                 title = "Bảo mật sinh trắc học".localized(),
                 subtitle = "Sử dụng vân tay/khuôn mặt".localized(),
                 checked = biometricEnabled,
@@ -433,7 +433,7 @@ fun SettingsScreen(
 
               Column {
                 CustomSettingRow(
-                  icon = Icons.Default.AccountBalance,
+                  icon = Icons.Rounded.AccountBalance,
                   title = "Tự động nhận diện thanh toán".localized(),
                   subtitle = "Đọc SMS/Thông báo ngân hàng để đối soát nợ tự động".localized(),
                   checked = autoSettleEnabled && hasListenerPermission,
@@ -488,7 +488,7 @@ fun SettingsScreen(
             shadowColor = MaterialTheme.colorScheme.error,
             shape = SplitBillShapes.medium
           ) {
-            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
+            Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null)
             Spacer(Modifier.width(Dimens.SpacingS))
             Text(
               text = "Đăng xuất".localized(),
@@ -550,7 +550,7 @@ fun SettingsScreen(
       onDismissRequest = { showLogoutConfirm = false },
       icon = {
         Icon(
-          Icons.Default.Warning,
+          Icons.Rounded.Warning,
           contentDescription = null,
           tint = MaterialTheme.colorScheme.error,
           modifier = Modifier.size(36.dp)
@@ -723,7 +723,7 @@ private fun LanguageOptionItem(
       }
       if (isSelected) {
         Icon(
-          Icons.Default.Check,
+          Icons.Rounded.Check,
           contentDescription = null,
           tint = MaterialTheme.colorScheme.primary
         )

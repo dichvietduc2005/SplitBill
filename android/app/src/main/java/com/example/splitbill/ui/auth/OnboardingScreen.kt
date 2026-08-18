@@ -9,11 +9,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,19 +44,19 @@ fun OnboardingScreen(
     OnboardingPageData(
       title = "Chia Hóa Đơn Dễ Dàng",
       description = "Tạo hóa đơn, tự động tính toán số tiền mỗi thành viên cần trả một cách chính xác tuyệt đối.",
-      icon = Icons.Default.Group,
+      icon = Icons.Rounded.Group,
       colorGradient = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))
     ),
     OnboardingPageData(
       title = "Thanh Toán VietQR Thông Minh",
       description = "Quét mã VietQR tự động điền số tiền và nội dung. Đọc thông báo ngân hàng để tự động gạch nợ!",
-      icon = Icons.Default.QrCodeScanner,
+      icon = Icons.Rounded.QrCodeScanner,
       colorGradient = listOf(Color(0xFF059669), Color(0xFF10B981))
     ),
     OnboardingPageData(
       title = "Thống Kê Chi Tiêu Trực Quan",
       description = "Theo dõi dòng tiền nhóm, biểu đồ chi tiêu và xuất báo cáo PDF/CSV bất cứ lúc nào.",
-      icon = Icons.Default.AccountBalanceWallet,
+      icon = Icons.Rounded.AccountBalanceWallet,
       colorGradient = listOf(Color(0xFFD97706), Color(0xFFF59E0B))
     )
   )
@@ -195,7 +195,7 @@ fun OnboardingScreen(
           )
           Spacer(modifier = Modifier.width(8.dp))
           Icon(
-            imageVector = if (pagerState.currentPage == pages.size - 1) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.ArrowForward,
+            imageVector = if (pagerState.currentPage == pages.size - 1) Icons.Rounded.CheckCircle else Icons.AutoMirrored.Rounded.ArrowForward,
             contentDescription = null
           )
         }
