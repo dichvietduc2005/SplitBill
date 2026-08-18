@@ -42,48 +42,56 @@ class GroupStatsViewModel(
   private val _categoryBreakdown = MutableStateFlow<List<CategorySpending>>(emptyList())
   val categoryBreakdown: StateFlow<List<CategorySpending>> = _categoryBreakdown.asStateFlow()
 
+  private val _rawBills = MutableStateFlow<List<com.example.splitbill.data.api.BillResponse>>(emptyList())
+  val rawBills: StateFlow<List<com.example.splitbill.data.api.BillResponse>> = _rawBills.asStateFlow()
+
   init {
     loadGroupStats()
   }
 
-  fun loadGroupStats() {
+  fun loadGroupStats(onComplete: (() -> Unit)? = null) {
     if (_uiState.value !is GroupStatsUiState.Success) {
       _uiState.value = GroupStatsUiState.Loading
     }
     viewModelScope.launch {
-      val result = statsRepository.getGroupStats(groupId)
-      val newState = if (result.isSuccess) {
-        GroupStatsUiState.Success(result.getOrNull()!!)
-      } else {
-        if (_uiState.value is GroupStatsUiState.Success) {
-          _uiState.value
+      try {
+        val result = statsRepository.getGroupStats(groupId)
+        val newState = if (result.isSuccess) {
+          GroupStatsUiState.Success(result.getOrNull()!!)
         } else {
-          GroupStatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê nhóm")
+          if (_uiState.value is GroupStatsUiState.Success) {
+            _uiState.value
+          } else {
+            GroupStatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê nhóm")
+          }
         }
-      }
-      _uiState.value = newState
-      if (newState is GroupStatsUiState.Success) {
-        stateCache[groupId] = newState
-      }
+        _uiState.value = newState
+        if (newState is GroupStatsUiState.Success) {
+          stateCache[groupId] = newState
+        }
 
-      // Calculate Category Breakdown
-      val billsResult = billRepository.getBillsForGroup(groupId)
-      if (billsResult.isSuccess) {
-        val bills = billsResult.getOrNull() ?: emptyList()
-        val totalGroupSpent = bills.sumOf { it.totalAmount }
-        if (totalGroupSpent > 0) {
-          val breakdown = bills.groupBy { it.category }
-            .map { (catKey, catBills) ->
-              val catTotal = catBills.sumOf { it.totalAmount }
-              CategorySpending(
-                categoryKey = catKey,
-                totalAmount = catTotal,
-                percentage = ((catTotal / totalGroupSpent) * 100).toFloat()
-              )
-            }
-            .sortedByDescending { it.totalAmount }
-          _categoryBreakdown.value = breakdown
+        // Calculate Category Breakdown
+        val billsResult = billRepository.getBillsForGroup(groupId)
+        if (billsResult.isSuccess) {
+          val bills = billsResult.getOrNull() ?: emptyList()
+          _rawBills.value = bills
+          val totalGroupSpent = bills.sumOf { it.totalAmount }
+          if (totalGroupSpent > 0) {
+            val breakdown = bills.groupBy { it.category }
+              .map { (catKey, catBills) ->
+                val catTotal = catBills.sumOf { it.totalAmount }
+                CategorySpending(
+                  categoryKey = catKey,
+                  totalAmount = catTotal,
+                  percentage = ((catTotal / totalGroupSpent) * 100).toFloat()
+                )
+              }
+              .sortedByDescending { it.totalAmount }
+            _categoryBreakdown.value = breakdown
+          }
         }
+      } finally {
+        onComplete?.invoke()
       }
     }
   }

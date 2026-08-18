@@ -24,17 +24,21 @@ class StatsViewModel(private val statsRepository: StatsRepository) : ViewModel()
     loadStats()
   }
 
-  fun loadStats() {
+  fun loadStats(onComplete: (() -> Unit)? = null) {
     // Keep data if already loaded to avoid blank screen flicker
     if (_uiState.value !is StatsUiState.Success) {
       _uiState.value = StatsUiState.Loading
     }
     viewModelScope.launch {
-      val result = statsRepository.getUserStats()
-      if (result.isSuccess) {
-        _uiState.value = StatsUiState.Success(result.getOrNull()!!)
-      } else {
-        _uiState.value = StatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê")
+      try {
+        val result = statsRepository.getUserStats()
+        if (result.isSuccess) {
+          _uiState.value = StatsUiState.Success(result.getOrNull()!!)
+        } else {
+          _uiState.value = StatsUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải thống kê")
+        }
+      } finally {
+        onComplete?.invoke()
       }
     }
   }
