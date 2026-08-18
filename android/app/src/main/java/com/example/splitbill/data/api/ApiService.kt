@@ -17,8 +17,18 @@ import kotlinx.serialization.json.Json
 object ApiService {
   const val BASE_URL = "http://192.168.1.206:8081"
 
+  @Volatile private var clientInstance: HttpClient? = null
+  @Volatile private var clientToken: String? = null
+
+  @Synchronized
   fun createClient(token: String? = null): HttpClient {
-    return HttpClient(OkHttp) {
+    val existingClient = clientInstance
+    if (existingClient != null && clientToken == token) {
+      return existingClient
+    }
+    clientToken = token
+    existingClient?.close()
+    val newClient = HttpClient(OkHttp) {
       expectSuccess = true // Thêm dòng này để ném lỗi HTTP (401, 500) thay vì cố parse text thành JSON
       install(ContentNegotiation) {
         json(Json {
@@ -38,6 +48,8 @@ object ApiService {
         }
       }
     }
+    clientInstance = newClient
+    return newClient
   }
 
 }

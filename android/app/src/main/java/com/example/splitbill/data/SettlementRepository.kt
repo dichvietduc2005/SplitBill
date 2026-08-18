@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.first
 
 class SettlementRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   suspend fun createSettlement(
     groupId: String,

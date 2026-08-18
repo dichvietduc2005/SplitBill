@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.first
 
 class InviteRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   suspend fun createInvite(groupId: String, maxUses: Int?): Result<InviteResponse> {
     return try {
