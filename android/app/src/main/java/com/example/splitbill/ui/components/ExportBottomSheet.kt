@@ -4,8 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -54,7 +54,7 @@ fun ExportBottomSheet(
       ExportOptionCard(
         title = "Xuất file PDF (.pdf)",
         description = "Báo cáo đẹp mắt có bảng kê chi tiết, sẵn sàng để in hoặc gửi file",
-        icon = Icons.Default.PictureAsPdf,
+        icon = Icons.Rounded.PictureAsPdf,
         iconTint = MaterialTheme.colorScheme.error,
         onClick = {
           onDismiss()
@@ -67,7 +67,7 @@ fun ExportBottomSheet(
       ExportOptionCard(
         title = "Xuất file CSV (.csv)",
         description = "File dữ liệu bảng tính, dễ dàng mở bằng Excel hoặc Google Sheets",
-        icon = Icons.Default.Description,
+        icon = Icons.Rounded.Description,
         iconTint = MaterialTheme.colorScheme.primary,
         onClick = {
           onDismiss()

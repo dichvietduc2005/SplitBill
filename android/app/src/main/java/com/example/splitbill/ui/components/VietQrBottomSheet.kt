@@ -23,7 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -204,7 +204,7 @@ fun VietQrBottomSheet(
           contentAlignment = Alignment.Center
         ) {
           Icon(
-            Icons.Default.AccountBalance,
+            Icons.Rounded.AccountBalance,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.size(22.dp)
@@ -223,7 +223,7 @@ fun VietQrBottomSheet(
           )
         }
         IconButton(onClick = onDismiss) {
-          Icon(Icons.Default.Close, contentDescription = "Đóng")
+          Icon(Icons.Rounded.Close, contentDescription = "Đóng")
         }
       }
 
@@ -263,7 +263,7 @@ fun VietQrBottomSheet(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = MaterialTheme.shapes.medium
           ) {
-            Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.AccountBalance, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(Dimens.SpacingS))
             Text("Mở danh sách Ngân hàng", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
           }
@@ -339,7 +339,7 @@ fun VietQrBottomSheet(
             CopyRow(
               label = "Ngân hàng",
               value = bankName,
-              icon = Icons.Default.AccountBalance,
+              icon = Icons.Rounded.AccountBalance,
               copied = copiedField == "bank",
               onCopy = {
                 copyToClipboard(context, "Ngân hàng", bankCode)
@@ -353,7 +353,7 @@ fun VietQrBottomSheet(
             CopyRow(
               label = "Số tài khoản",
               value = accountNumber,
-              icon = Icons.Default.CreditCard,
+              icon = Icons.Rounded.CreditCard,
               copied = copiedField == "account",
               onCopy = {
                 copyToClipboard(context, "Số tài khoản", accountNumber)
@@ -367,7 +367,7 @@ fun VietQrBottomSheet(
             CopyRow(
               label = "Chủ tài khoản",
               value = accountName,
-              icon = Icons.Default.Person,
+              icon = Icons.Rounded.Person,
               copied = false,
               onCopy = null
             )
@@ -378,7 +378,7 @@ fun VietQrBottomSheet(
             CopyRow(
               label = "Số tiền",
               value = "$formattedAmount đ",
-              icon = Icons.Default.Payments,
+              icon = Icons.Rounded.Payments,
               copied = copiedField == "amount",
               onCopy = {
                 copyToClipboard(context, "Số tiền", amountLong.toString())
@@ -392,7 +392,7 @@ fun VietQrBottomSheet(
             CopyRow(
               label = "Nội dung CK",
               value = description,
-              icon = Icons.Default.Message,
+              icon = Icons.Rounded.Message,
               copied = copiedField == "desc",
               onCopy = {
                 copyToClipboard(context, "Nội dung", description)
@@ -415,7 +415,7 @@ fun VietQrBottomSheet(
             containerColor = MaterialTheme.colorScheme.primary
           )
         ) {
-          Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+          Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(Dimens.SpacingS))
           Text("Chia sẻ Ảnh Mã QR qua Zalo", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
         }
@@ -427,7 +427,7 @@ fun VietQrBottomSheet(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Icon(
-              Icons.Default.CheckCircle,
+              Icons.Rounded.CheckCircle,
               contentDescription = null,
               tint = MaterialTheme.colorScheme.primary,
               modifier = Modifier.size(16.dp)
@@ -495,7 +495,7 @@ private fun QrToggleSection(
       contentColor = MaterialTheme.colorScheme.primary
     )
   ) {
-    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+    Icon(Icons.Rounded.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
     Spacer(Modifier.width(Dimens.SpacingS))
     Text(
       if (showQr) "Ẩn mã QR" else "Hiện mã QR để quét",
@@ -503,7 +503,7 @@ private fun QrToggleSection(
       modifier = Modifier.weight(1f)
     )
     Icon(
-      Icons.Default.KeyboardArrowDown,
+      Icons.Rounded.KeyboardArrowDown,
       contentDescription = null,
       modifier = Modifier
         .size(20.dp)
@@ -552,7 +552,7 @@ private fun QrToggleSection(
         onClick = { saveImageToGallery(context, qrImageUrl) },
         shape = MaterialTheme.shapes.medium
       ) {
-        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(Dimens.SpacingXS))
         Text("Lưu mã QR về máy")
       }
@@ -607,7 +607,7 @@ private fun NoBankInfoCard(creditorName: String) {
       horizontalAlignment = Alignment.CenterHorizontally
     ) {
       Icon(
-        Icons.Default.AccountBalanceWallet,
+        Icons.Rounded.AccountBalanceWallet,
         contentDescription = null,
         tint = MaterialTheme.colorScheme.error,
         modifier = Modifier.size(48.dp)
@@ -664,7 +664,7 @@ private fun CopyRow(
     if (onCopy != null) {
       IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
         Icon(
-          if (copied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+          if (copied) Icons.Rounded.CheckCircle else Icons.Rounded.ContentCopy,
           contentDescription = "Sao chép",
           tint = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.size(18.dp)

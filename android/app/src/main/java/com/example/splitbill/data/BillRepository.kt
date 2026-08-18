@@ -20,7 +20,7 @@ import io.ktor.http.HttpHeaders
 
 class BillRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   suspend fun getBillsForGroup(groupId: String): Result<List<BillResponse>> {
     return try {

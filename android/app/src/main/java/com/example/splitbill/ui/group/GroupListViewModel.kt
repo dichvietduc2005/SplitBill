@@ -34,19 +34,23 @@ class GroupListViewModel(
     loadGroups()
   }
 
-  fun loadGroups() {
+  fun loadGroups(onComplete: (() -> Unit)? = null) {
     // Only show loading skeleton on initial fetch to avoid jarring flashes
     if (_uiState.value !is GroupListUiState.Success) {
       _uiState.value = GroupListUiState.Loading
     }
     viewModelScope.launch {
-      val result = groupRepository.getGroups()
-      if (result.isSuccess) {
-        val newState = GroupListUiState.Success(result.getOrDefault(emptyList()))
-        _uiState.value = newState
-        cachedState = newState
-      } else {
-        _uiState.value = GroupListUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải nhóm")
+      try {
+        val result = groupRepository.getGroups()
+        if (result.isSuccess) {
+          val newState = GroupListUiState.Success(result.getOrDefault(emptyList()))
+          _uiState.value = newState
+          cachedState = newState
+        } else {
+          _uiState.value = GroupListUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải nhóm")
+        }
+      } finally {
+        onComplete?.invoke()
       }
     }
   }

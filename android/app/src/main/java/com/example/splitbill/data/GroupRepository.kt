@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.first
 
 class GroupRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   suspend fun getGroups(): Result<List<GroupResponse>> {
     return try {

@@ -11,9 +11,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,9 +46,9 @@ fun FloatingBottomBar(
 ) {
   val haptic = LocalHapticFeedback.current
   val tabs = listOf(
-    TabItem(HomeTab.Groups, "Nhóm".localized(), Icons.Default.Groups),
-    TabItem(HomeTab.Profile, "Cá nhân".localized(), Icons.Default.Person),
-    TabItem(HomeTab.Settings, "Cài đặt".localized(), Icons.Default.Settings)
+    TabItem(HomeTab.Groups, "Nhóm".localized(), Icons.Rounded.Groups),
+    TabItem(HomeTab.Profile, "Cá nhân".localized(), Icons.Rounded.Person),
+    TabItem(HomeTab.Settings, "Cài đặt".localized(), Icons.Rounded.Settings)
   )
 
   Box(

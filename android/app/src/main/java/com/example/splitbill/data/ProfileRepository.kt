@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.first
 
 class ProfileRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   /** Lấy profile của người dùng đang đăng nhập */
   suspend fun getMyProfile(): Result<ProfileResponse> {

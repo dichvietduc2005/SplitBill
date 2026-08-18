@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -73,13 +73,13 @@ fun DebtSummaryScreen(
           // Nút vào profile để thiết lập tài khoản ngân hàng
           IconButton(onClick = onNavigateToProfile) {
             Icon(
-              Icons.Default.AccountBalanceWallet,
+              Icons.Rounded.AccountBalanceWallet,
               contentDescription = "Tài khoản ngân hàng",
               tint = MaterialTheme.colorScheme.primary
             )
           }
           IconButton(onClick = { viewModel.loadDebts() }) {
-            Icon(Icons.Default.Refresh, contentDescription = "Làm mới", tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Rounded.Refresh, contentDescription = "Làm mới", tint = MaterialTheme.colorScheme.primary)
           }
         }
       )
@@ -118,7 +118,7 @@ fun DebtSummaryScreen(
                 Column {
                   Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                      Icons.Default.AccountBalance,
+                      Icons.Rounded.AccountBalance,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary,
                       modifier = Modifier.size(24.dp)
@@ -176,7 +176,7 @@ fun DebtSummaryScreen(
                     verticalAlignment = Alignment.CenterVertically
                   ) {
                     Icon(
-                      Icons.Default.QrCode2,
+                      Icons.Rounded.QrCode2,
                       contentDescription = null,
                       tint = MaterialTheme.colorScheme.primary,
                       modifier = Modifier.size(20.dp)
@@ -281,7 +281,7 @@ fun DebtSummaryScreen(
     PremiumDialog(
       onDismissRequest = { showSettleConfirmDialog = null },
       title = "Xác nhận trả nợ",
-      icon = Icons.Default.CheckCircle,
+      icon = Icons.Rounded.CheckCircle,
       confirmButtonText = "Xác nhận",
       onConfirm = {
         viewModel.settleDebt(
@@ -358,7 +358,7 @@ fun DebtSummaryScreen(
       ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
           Icon(
-            Icons.Default.CheckCircle,
+            Icons.Rounded.CheckCircle,
             contentDescription = "Success",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(80.dp)
@@ -408,7 +408,7 @@ private fun DebtCard(
         }
         Column(horizontalAlignment = Alignment.End) {
           Icon(
-            Icons.Default.ArrowForward,
+            Icons.Rounded.ArrowForward,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(20.dp)
@@ -443,7 +443,7 @@ private fun DebtCard(
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
           )
         ) {
-          Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+          Icon(Icons.Rounded.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(Dimens.SpacingXS))
           Text(
             if (isCreditor) "Mã nhận QR" else "Quét mã QR",
@@ -460,7 +460,7 @@ private fun DebtCard(
             containerColor = MaterialTheme.colorScheme.primary
           )
         ) {
-          Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+          Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(Dimens.SpacingXS))
           Text(
             "Đã trả xong",
@@ -476,7 +476,7 @@ private fun DebtCard(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
         ) {
           Icon(
-            Icons.Default.Share,
+            Icons.Rounded.Share,
             contentDescription = "Chia sẻ Ảnh QR sang Zalo",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)

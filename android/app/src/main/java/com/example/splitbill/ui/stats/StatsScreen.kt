@@ -9,8 +9,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,12 +43,7 @@ fun StatsScreen(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
     topBar = {
       SplitBillTopBar(
-        title = "Thống kê chi tiêu",
-        actions = {
-          IconButton(onClick = { viewModel.loadStats() }) {
-            Icon(Icons.Default.Refresh, contentDescription = "Làm mới", tint = MaterialTheme.colorScheme.primary)
-          }
-        }
+        title = "Thống kê chi tiêu"
       )
     },
     modifier = modifier.fillMaxSize()
@@ -69,10 +66,23 @@ fun StatsScreen(
         )
       }
       is StatsUiState.Success -> {
-        StatsContent(
-          stats = state.data,
+        var isRefreshing by remember { mutableStateOf(false) }
+        val pullRefreshState = rememberPullToRefreshState()
+
+        PullToRefreshBox(
+          isRefreshing = isRefreshing,
+          onRefresh = {
+            isRefreshing = true
+            viewModel.loadStats { isRefreshing = false }
+          },
+          state = pullRefreshState,
           modifier = Modifier.padding(paddingValues).fillMaxSize()
-        )
+        ) {
+          StatsContent(
+            stats = state.data,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
       }
     }
   }
@@ -97,7 +107,7 @@ private fun StatsContent(stats: UserStatsResponse, modifier: Modifier = Modifier
           containerColor = MaterialTheme.colorScheme.primaryContainer
         ) {
           Column {
-            Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Rounded.TrendingUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(Dimens.SpacingXS))
             Text("Bạn đã chi tiêu", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
             Spacer(Modifier.height(4.dp))
@@ -118,7 +128,7 @@ private fun StatsContent(stats: UserStatsResponse, modifier: Modifier = Modifier
           containerColor = MaterialTheme.colorScheme.errorContainer
         ) {
           Column {
-            Icon(Icons.Default.ArrowOutward, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Rounded.ArrowOutward, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(Dimens.SpacingXS))
             Text("Bạn đang nợ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f))
             Spacer(Modifier.height(4.dp))
@@ -132,7 +142,7 @@ private fun StatsContent(stats: UserStatsResponse, modifier: Modifier = Modifier
           containerColor = MaterialTheme.colorScheme.secondaryContainer
         ) {
           Column {
-            Icon(Icons.Default.CallReceived, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+            Icon(Icons.Rounded.CallReceived, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
             Spacer(Modifier.height(Dimens.SpacingXS))
             Text("Bạn được nợ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
             Spacer(Modifier.height(4.dp))
@@ -158,63 +168,9 @@ private fun StatsContent(stats: UserStatsResponse, modifier: Modifier = Modifier
             )
             Spacer(Modifier.height(Dimens.SpacingL))
 
-            val maxAmount = stats.monthlyTrend.maxOf { it.amount }.coerceAtLeast(1.0)
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .padding(horizontal = Dimens.SpacingS),
-              horizontalArrangement = Arrangement.SpaceEvenly,
-              verticalAlignment = Alignment.Bottom
-            ) {
-              stats.monthlyTrend.forEach { trend ->
-                val ratio = (trend.amount / maxAmount).toFloat()
-                var animHeight by remember { mutableStateOf(0f) }
-                LaunchedEffect(ratio) {
-                  animate(
-                    initialValue = 0f,
-                    targetValue = ratio,
-                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
-                  ) { value, _ ->
-                    animHeight = value
-                  }
-                }
-
-                Column(
-                  horizontalAlignment = Alignment.CenterHorizontally,
-                  modifier = Modifier.weight(1f)
-                ) {
-                  Text(
-                    text = if (trend.amount >= 1000) "${(trend.amount / 1000).toInt()}k" else "${trend.amount.toInt()}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                  )
-                  Spacer(Modifier.height(4.dp))
-                  Box(
-                    modifier = Modifier
-                      .fillMaxHeight(0.75f)
-                      .fillMaxWidth(0.4f)
-                      .graphicsLayer { scaleY = animHeight; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f) }
-                      .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                      .background(
-                        Brush.verticalGradient(
-                          listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                          )
-                        )
-                      )
-                  )
-                  Spacer(Modifier.height(Dimens.SpacingS))
-                  Text(
-                    text = trend.month,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                  )
-                }
-              }
-            }
+            com.example.splitbill.ui.components.MonthlyBarChart(
+              monthlyData = stats.monthlyTrend
+            )
           }
         }
       }

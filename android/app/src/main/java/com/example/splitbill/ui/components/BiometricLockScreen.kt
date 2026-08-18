@@ -7,7 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -112,7 +112,7 @@ fun BiometricLockScreen(onUnlockSuccess: () -> Unit) {
         ) {
           Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(
-              imageVector = Icons.Default.Fingerprint,
+              imageVector = Icons.Rounded.Fingerprint,
               contentDescription = "Scan",
               tint = if (isSuccess) MaterialTheme.colorScheme.onPrimary
               else MaterialTheme.colorScheme.primary,

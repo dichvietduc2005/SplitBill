@@ -6,12 +6,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.rounded.GroupAdd
 import androidx.compose.material.icons.rounded.PostAdd
 import androidx.compose.material3.*
@@ -47,8 +48,8 @@ import com.example.splitbill.ui.localization.localized
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import com.example.splitbill.data.StatsRepository
 import com.example.splitbill.ui.stats.GroupStatsViewModel
 import com.example.splitbill.ui.stats.GroupStatsUiState
@@ -103,14 +104,14 @@ fun GroupDetailScreen(
         actions = {
           IconButton(onClick = { onViewActivities(state.group?.id ?: "") }) {
             Icon(
-              imageVector = Icons.Default.History,
+              imageVector = Icons.Rounded.History,
               contentDescription = "Lịch sử hoạt động",
               tint = MaterialTheme.colorScheme.primary
             )
           }
           IconButton(onClick = { showGroupInfoDialog = true }) {
             Icon(
-              imageVector = Icons.Default.Info,
+              imageVector = Icons.Rounded.Info,
               contentDescription = "Thông tin nhóm",
               tint = MaterialTheme.colorScheme.primary
             )
@@ -158,12 +159,34 @@ fun GroupDetailScreen(
       LaunchedEffect(state.isLoading) {
           if (!state.isLoading) isRefreshing = false
       }
+
+      var searchQuery by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+      var selectedCategoryFilter by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+      var selectedSortOption by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(BillSortOption.NEWEST) }
+      var sortDropdownExpanded by remember { mutableStateOf(false) }
+
+      val filteredBills = remember(state.bills, searchQuery, selectedCategoryFilter, selectedSortOption) {
+        state.bills.filter { bill ->
+          val matchesSearch = searchQuery.isBlank() ||
+            bill.description.contains(searchQuery, ignoreCase = true) ||
+            bill.paidByUsername.contains(searchQuery, ignoreCase = true)
+          val matchesCategory = selectedCategoryFilter == null || bill.category == selectedCategoryFilter
+          matchesSearch && matchesCategory
+        }.let { list ->
+          when (selectedSortOption) {
+            BillSortOption.NEWEST -> list
+            BillSortOption.OLDEST -> list.reversed()
+            BillSortOption.HIGHEST -> list.sortedByDescending { it.totalAmount * (if (it.exchangeRate > 0) it.exchangeRate else 1.0) }
+            BillSortOption.LOWEST -> list.sortedBy { it.totalAmount * (if (it.exchangeRate > 0) it.exchangeRate else 1.0) }
+          }
+        }
+      }
       val pullRefreshState = rememberPullToRefreshState()
       PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = { 
             isRefreshing = true
-            viewModel.loadAll() 
+            viewModel.loadAll { isRefreshing = false }
         },
         state = pullRefreshState,
         modifier = Modifier.padding(paddingValues).fillMaxSize()
@@ -221,25 +244,146 @@ fun GroupDetailScreen(
           }
         }
 
-        // --- Bills Section ---
+        // --- Bills Section Header & Search/Filter ---
         item {
           Spacer(Modifier.height(Dimens.SpacingM))
-          Text(
-            "Hóa đơn gần đây (${state.bills.size})",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground
+
+          // 1. Title & Sort Dropdown
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              "Hóa đơn (${filteredBills.size}/${state.bills.size})",
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onBackground
+            )
+
+            // Sort Menu Button
+            Box {
+              TextButton(
+                onClick = { sortDropdownExpanded = true },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Sort,
+                  contentDescription = "Sắp xếp",
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                  selectedSortOption.displayName,
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = MaterialTheme.colorScheme.primary
+                )
+              }
+
+              DropdownMenu(
+                expanded = sortDropdownExpanded,
+                onDismissRequest = { sortDropdownExpanded = false }
+              ) {
+                BillSortOption.entries.forEach { option ->
+                  DropdownMenuItem(
+                    text = {
+                      Text(
+                        option.displayName,
+                        fontWeight = if (option == selectedSortOption) FontWeight.Bold else FontWeight.Normal,
+                        color = if (option == selectedSortOption) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                      )
+                    },
+                    onClick = {
+                      selectedSortOption = option
+                      sortDropdownExpanded = false
+                    },
+                    leadingIcon = {
+                      if (option == selectedSortOption) {
+                        Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                      }
+                    }
+                  )
+                }
+              }
+            }
+          }
+
+          Spacer(Modifier.height(Dimens.SpacingS))
+
+          // 2. Search Text Field
+          OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Tìm hóa đơn hoặc tên người trả...") },
+            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = "Tìm kiếm", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            trailingIcon = {
+              if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = { searchQuery = "" }) {
+                  Icon(Icons.Rounded.Clear, contentDescription = "Xóa", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+              }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            textStyle = MaterialTheme.typography.bodyMedium
           )
+
+          Spacer(Modifier.height(Dimens.SpacingS))
+
+          // 3. Category Filter Chips Row
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingXS),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            // "Tất cả" Chip
+            item {
+              FilterChip(
+                selected = selectedCategoryFilter == null,
+                onClick = { selectedCategoryFilter = null },
+                label = { Text("Tất cả") },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = MaterialTheme.colorScheme.primary,
+                  selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
+              )
+            }
+
+            items(com.example.splitbill.data.model.BillCategory.entries.toTypedArray()) { category ->
+              val isSelected = selectedCategoryFilter == category.key
+              FilterChip(
+                selected = isSelected,
+                onClick = {
+                  selectedCategoryFilter = if (isSelected) null else category.key
+                },
+                leadingIcon = {
+                  Icon(
+                    imageVector = category.icon,
+                    contentDescription = null,
+                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else category.iconColor,
+                    modifier = Modifier.size(16.dp)
+                  )
+                },
+                label = { Text(category.displayName) },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = MaterialTheme.colorScheme.primary,
+                  selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
+              )
+            }
+          }
         }
-        if (state.bills.isEmpty()) {
+
+        if (filteredBills.isEmpty()) {
           item {
             EmptyState(
-              title = "Chưa có hóa đơn nào",
-              message = "Hãy bấm nút '+' để thêm hóa đơn đầu tiên!",
+              title = if (state.bills.isEmpty()) "Chưa có hóa đơn nào" else "Không tìm thấy hóa đơn",
+              message = if (state.bills.isEmpty()) "Hãy bấm nút '+' để thêm hóa đơn đầu tiên!" else "Thử đổi từ khóa hoặc bộ lọc khác",
               modifier = Modifier.fillMaxWidth()
             )
           }
         } else {
-          itemsIndexed(state.bills, key = { _, bill -> bill.id }) { index, bill ->
+          itemsIndexed(filteredBills, key = { _, bill -> bill.id }) { index, bill ->
             var visible by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
               kotlinx.coroutines.delay((index + state.members.size) * Motion.StaggerDelay)
@@ -344,7 +488,7 @@ fun GroupDetailScreen(
                 }
               }
             ) {
-              Icon(Icons.Default.Send, contentDescription = "Gửi", tint = MaterialTheme.colorScheme.primary)
+              Icon(Icons.Rounded.Send, contentDescription = "Gửi", tint = MaterialTheme.colorScheme.primary)
             }
           }
         )
@@ -367,7 +511,7 @@ fun GroupDetailScreen(
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = MaterialTheme.shapes.medium
           ) {
-            Icon(Icons.Default.Link, contentDescription = null)
+            Icon(Icons.Rounded.Link, contentDescription = null)
             Spacer(Modifier.width(Dimens.SpacingS))
             Text("Tạo liên kết mời 7 ngày", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
           }
@@ -417,7 +561,7 @@ fun GroupDetailScreen(
                 clipboardManager.setText(AnnotatedString(invite!!.inviteUrl))
               }
             ) {
-              Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
+              Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
             }
             IconButton(
               onClick = {
@@ -430,7 +574,7 @@ fun GroupDetailScreen(
                 context.startActivity(shareIntent)
               }
             ) {
-              Icon(Icons.Default.Share, contentDescription = "Chia sẻ", tint = MaterialTheme.colorScheme.primary)
+              Icon(Icons.Rounded.Share, contentDescription = "Chia sẻ", tint = MaterialTheme.colorScheme.primary)
             }
           }
         }
@@ -445,7 +589,7 @@ fun GroupDetailScreen(
     PremiumDialog(
       onDismissRequest = { showGroupInfoDialog = false },
       title = "Thông tin nhóm",
-      icon = Icons.Default.Info,
+      icon = Icons.Rounded.Info,
       confirmButtonText = "Đóng",
       onConfirm = { showGroupInfoDialog = false },
       content = {
@@ -494,7 +638,7 @@ fun GroupDetailScreen(
             )
             Spacer(Modifier.width(Dimens.SpacingS))
             Icon(
-              Icons.Default.ContentCopy, 
+              Icons.Rounded.ContentCopy, 
               contentDescription = "Copy",
               modifier = Modifier.size(16.dp),
               tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -575,7 +719,7 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
           contentAlignment = Alignment.Center
         ) {
           Icon(
-            Icons.Default.Payments, 
+            Icons.Rounded.Payments, 
             contentDescription = null, 
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(28.dp) // Larger icon
@@ -619,7 +763,7 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
             contentAlignment = Alignment.Center
           ) {
             Icon(
-              Icons.Default.Group, 
+              Icons.Rounded.Group, 
               contentDescription = null, 
               tint = com.example.splitbill.theme.BadgeMemberIcon, 
               modifier = Modifier.size(18.dp)
@@ -658,7 +802,7 @@ private fun HeroSummaryCard(totalSpent: Double, memberCount: Int, billCount: Int
             contentAlignment = Alignment.Center
           ) {
             Icon(
-              Icons.Default.Receipt, 
+              Icons.Rounded.Receipt, 
               contentDescription = null, 
               tint = com.example.splitbill.theme.BadgeBillIcon, 
               modifier = Modifier.size(18.dp)
@@ -681,7 +825,7 @@ private fun ActionGrid(
     horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap)
   ) {
     ActionItem(
-      icon = Icons.Default.AccountBalanceWallet,
+      icon = Icons.Rounded.AccountBalanceWallet,
       label = "Gợi ý chia tiền",
       onClick = onSuggestSplit,
       modifier = Modifier.weight(1f),
@@ -689,7 +833,7 @@ private fun ActionGrid(
       badgeIconTint = customColors.badgeBillIcon
     )
     ActionItem(
-      icon = Icons.Default.BarChart,
+      icon = Icons.Rounded.BarChart,
       label = "Thống kê",
       onClick = onStats,
       modifier = Modifier.weight(1f),
@@ -836,7 +980,7 @@ private fun BillCard(
       ) {
         if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
           Icon(
-            Icons.Default.Delete,
+            Icons.Rounded.Delete,
             contentDescription = "Xóa",
             tint = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.size(28.dp)
@@ -944,7 +1088,7 @@ private fun BillCard(
               modifier = Modifier.size(32.dp)
             ) {
               Icon(
-                Icons.Default.Edit,
+                Icons.Rounded.Edit,
                 contentDescription = "Sửa",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
@@ -1000,7 +1144,7 @@ private fun BillCard(
               contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
               Icon(
-                imageVector = if (bill.isPaid) Icons.Default.RemoveCircleOutline else Icons.Default.CheckCircle,
+                imageVector = if (bill.isPaid) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.CheckCircle,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp)
               )
@@ -1021,7 +1165,7 @@ private fun BillCard(
     PremiumDialog(
       onDismissRequest = { showDeleteDialog = false },
       title = "Xóa hóa đơn?",
-      icon = Icons.Default.DeleteSweep,
+      icon = Icons.Rounded.DeleteSweep,
       confirmButtonText = "Xóa",
       onConfirm = { onDelete(); showDeleteDialog = false },
       dismissButtonText = "Hủy",
@@ -1057,6 +1201,13 @@ private fun formatCreatedDateTime(isoString: String?): String {
   } catch (e: Exception) {
     isoString
   }
+}
+
+enum class BillSortOption(val displayName: String) {
+  NEWEST("Mới nhất"),
+  OLDEST("Cũ nhất"),
+  HIGHEST("Giá trị cao nhất"),
+  LOWEST("Giá trị thấp nhất")
 }
 
 

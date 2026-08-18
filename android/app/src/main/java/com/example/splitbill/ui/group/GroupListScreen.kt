@@ -21,8 +21,8 @@ import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Login
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material3.AlertDialog
@@ -131,18 +131,27 @@ fun GroupListScreen(
           )
         }
         is GroupListUiState.Success -> {
-          if (state.groups.isEmpty()) {
-            EmptyState(
-              title = "Chưa có nhóm nào".localized(),
-              message = "Hãy tạo nhóm mới để bắt đầu chia tiền nhé!".localized(),
-              emoji = "🎉",
-              modifier = Modifier.align(Alignment.Center)
-            )
-          } else {
-            PullToRefreshBox(
-              isRefreshing = false,
-              onRefresh = { viewModel.loadGroups() }
-            ) {
+          var isRefreshing by remember { mutableStateOf(false) }
+          PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+              isRefreshing = true
+              viewModel.loadGroups { isRefreshing = false }
+            },
+            modifier = Modifier.fillMaxSize()
+          ) {
+            if (state.groups.isEmpty()) {
+              Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+              ) {
+                EmptyState(
+                  title = "Chưa có nhóm nào".localized(),
+                  message = "Hãy tạo nhóm mới để bắt đầu chia tiền nhé!".localized(),
+                  emoji = "🎉"
+                )
+              }
+            } else {
               LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
                 state = listState,
@@ -182,7 +191,7 @@ fun GroupListScreen(
                         contentAlignment = Alignment.Center
                       ) {
                         Icon(
-                          Icons.Default.Groups,
+                          Icons.Rounded.Groups,
                           contentDescription = null,
                           tint = MaterialTheme.colorScheme.primary,
                           modifier = Modifier.size(32.dp)
@@ -318,7 +327,7 @@ fun GroupCard(group: GroupResponse, onClick: () -> Unit) {
           contentAlignment = Alignment.Center
         ) {
           Icon(
-            imageVector = Icons.Default.Groups,
+            imageVector = Icons.Rounded.Groups,
             contentDescription = null,
             tint = customColors.badgeGroupIcon,
             modifier = Modifier.size(24.dp)

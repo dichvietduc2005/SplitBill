@@ -33,25 +33,29 @@ class ActivityFeedViewModel(
     loadActivities()
   }
 
-  fun loadActivities() {
+  fun loadActivities(onComplete: (() -> Unit)? = null) {
     if (_uiState.value !is ActivityFeedUiState.Success) {
       _uiState.value = ActivityFeedUiState.Loading
     }
     viewModelScope.launch {
-      val result = groupRepository.getActivities(groupId, limit = 100, offset = 0)
-      val newState = if (result.isSuccess) {
-        val paginatedResponse = result.getOrNull()!!
-        ActivityFeedUiState.Success(paginatedResponse.data)
-      } else {
-        if (_uiState.value is ActivityFeedUiState.Success) {
-          _uiState.value
+      try {
+        val result = groupRepository.getActivities(groupId, limit = 100, offset = 0)
+        val newState = if (result.isSuccess) {
+          val paginatedResponse = result.getOrNull()!!
+          ActivityFeedUiState.Success(paginatedResponse.data)
         } else {
-          ActivityFeedUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải lịch sử hoạt động")
+          if (_uiState.value is ActivityFeedUiState.Success) {
+            _uiState.value
+          } else {
+            ActivityFeedUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải lịch sử hoạt động")
+          }
         }
-      }
-      _uiState.value = newState
-      if (newState is ActivityFeedUiState.Success) {
-        stateCache[groupId] = newState
+        _uiState.value = newState
+        if (newState is ActivityFeedUiState.Success) {
+          stateCache[groupId] = newState
+        }
+      } finally {
+        onComplete?.invoke()
       }
     }
   }

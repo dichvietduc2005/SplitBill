@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.first
 
 class StatsRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
 
   suspend fun getUserStats(): Result<UserStatsResponse> {
     return try {

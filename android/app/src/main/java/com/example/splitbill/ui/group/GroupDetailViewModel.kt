@@ -39,8 +39,8 @@ class GroupDetailViewModel(
   }
 
   private val _state = MutableStateFlow(
-    // Khôi phục từ cache ngay lập tức nếu có → không hiện skeleton
-    stateCache[groupId]?.copy(isLoading = false) ?: GroupDetailState()
+    // Khôi phục từ cache ngay lập tức nếu có dữ liệu nhóm thực tế
+    stateCache[groupId]?.takeIf { it.group != null }?.copy(isLoading = false) ?: GroupDetailState()
   )
   val state: StateFlow<GroupDetailState> = _state.asStateFlow()
 
@@ -55,34 +55,38 @@ class GroupDetailViewModel(
     }
   }
 
-  fun loadAll() {
+  fun loadAll(onComplete: (() -> Unit)? = null) {
     // Chỉ hiện skeleton khi chưa có data nào (lần đầu hoàn toàn)
     if (_state.value.group == null) {
       _state.value = _state.value.copy(isLoading = true, error = null)
     }
     viewModelScope.launch {
-      // Chạy 3 API call song song thay vì tuần tự
-      val groupDeferred = async { groupRepository.getGroupDetails(groupId) }
-      val membersDeferred = async { groupRepository.getMembers(groupId) }
-      val billsDeferred = async { billRepository.getBillsForGroup(groupId) }
+      try {
+        // Chạy 3 API call song song thay vì tuần tự
+        val groupDeferred = async { groupRepository.getGroupDetails(groupId) }
+        val membersDeferred = async { groupRepository.getMembers(groupId) }
+        val billsDeferred = async { billRepository.getBillsForGroup(groupId) }
 
-      val groupResult = groupDeferred.await()
-      val membersResult = membersDeferred.await()
-      val billsResult = billsDeferred.await()
+        val groupResult = groupDeferred.await()
+        val membersResult = membersDeferred.await()
+        val billsResult = billsDeferred.await()
 
-      val membersList = membersResult.getOrElse { _state.value.members }
-      val billsList = billsResult.getOrElse { _state.value.bills }
+        val membersList = membersResult.getOrElse { _state.value.members }
+        val billsList = billsResult.getOrElse { _state.value.bills }
 
-      val newState = _state.value.copy(
-        isLoading = false,
-        group = groupResult.getOrNull() ?: _state.value.group,
-        members = membersList,
-        bills = billsList,
-        memberBalances = computeBalances(billsList, membersList),
-        error = if (groupResult.isFailure && _state.value.group == null) groupResult.exceptionOrNull()?.message else null
-      )
-      _state.value = newState
-      stateCache[groupId] = newState // Lưu vào cache
+        val newState = _state.value.copy(
+          isLoading = false,
+          group = groupResult.getOrNull() ?: _state.value.group,
+          members = membersList,
+          bills = billsList,
+          memberBalances = computeBalances(billsList, membersList),
+          error = if (groupResult.isFailure && _state.value.group == null) groupResult.exceptionOrNull()?.message else null
+        )
+        _state.value = newState
+        stateCache[groupId] = newState // Lưu vào cache
+      } finally {
+        onComplete?.invoke()
+      }
     }
   }
 

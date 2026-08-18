@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -15,6 +16,7 @@ class TokenManager(private val context: Context) {
   companion object {
     val JWT_TOKEN_KEY = stringPreferencesKey("jwt_token")
     val BIOMETRIC_TOKEN_KEY = stringPreferencesKey("biometric_token")
+    @Volatile private var cachedToken: String? = null
 
     fun getUserIdFromToken(token: String?): String? {
       if (token == null) return null
@@ -32,8 +34,17 @@ class TokenManager(private val context: Context) {
 
   fun getToken(): Flow<String?> {
     return context.dataStore.data.map { preferences ->
-      preferences[JWT_TOKEN_KEY]
+      val token = preferences[JWT_TOKEN_KEY]
+      cachedToken = token
+      token
     }
+  }
+
+  suspend fun getCachedToken(): String? {
+    if (cachedToken != null) return cachedToken
+    val token = getToken().first()
+    cachedToken = token
+    return token
   }
 
   fun getBiometricToken(): Flow<String?> {
@@ -43,6 +54,7 @@ class TokenManager(private val context: Context) {
   }
 
   suspend fun saveToken(token: String) {
+    cachedToken = token
     context.dataStore.edit { preferences ->
       preferences[JWT_TOKEN_KEY] = token
     }
