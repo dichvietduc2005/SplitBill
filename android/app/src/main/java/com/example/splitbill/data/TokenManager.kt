@@ -25,7 +25,7 @@ class TokenManager(private val context: Context) {
         if (parts.size != 3) return null
         val payload = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE))
         val json = org.json.JSONObject(payload)
-        json.optString("id", null)
+        if (json.has("sub")) json.getString("sub") else if (json.has("id")) json.getString("id") else null
       } catch (e: Exception) {
         null
       }
@@ -67,6 +67,7 @@ class TokenManager(private val context: Context) {
   }
 
   suspend fun deleteToken() {
+    cachedToken = null
     context.dataStore.edit { preferences ->
       preferences.remove(JWT_TOKEN_KEY)
     }

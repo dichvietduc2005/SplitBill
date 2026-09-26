@@ -137,7 +137,7 @@ fun ProfileScreen(
           when {
             url.isNullOrBlank() -> null
             url.startsWith("http") -> url
-            else -> "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (url.startsWith("/")) "" else "/"}$url"
+            else -> "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (url.startsWith("/")) "" else "/"}$url"
           }
         }
 

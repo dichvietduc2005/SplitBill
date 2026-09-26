@@ -1,16 +1,17 @@
 package com.example.splitbill.data
 
-import com.example.splitbill.data.api.ApiService
-import com.example.splitbill.data.api.CreateSettlementRequest
 import com.example.splitbill.data.api.SettlementResponse
-import io.ktor.client.call.body
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import kotlinx.coroutines.flow.first
+import com.example.splitbill.data.supabase.ActivityLogEntity
+import com.example.splitbill.data.supabase.ProfileEntity
+import com.example.splitbill.data.supabase.SettlementEntity
+import com.example.splitbill.data.supabase.SupabaseConfig
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
 
 class SettlementRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
+  private val postgrest get() = SupabaseConfig.client.postgrest
+  private val auth get() = SupabaseConfig.client.auth
 
   suspend fun createSettlement(
     groupId: String,
@@ -20,18 +21,53 @@ class SettlementRepository(private val tokenManager: TokenManager) {
     fromUserId: String? = null
   ): Result<SettlementResponse> {
     return try {
-      val response: SettlementResponse = getClient().post("/api/settlements") {
-        setBody(
-          CreateSettlementRequest(
+      val actualFromUserId = fromUserId ?: auth.currentUserOrNull()?.id
+        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
+        ?: return Result.failure(Exception("Chưa đăng nhập"))
+
+      val entity = postgrest["settlements"].insert(
+        SettlementEntity(
+          groupId = groupId,
+          fromUserId = actualFromUserId,
+          toUserId = toUserId,
+          amount = amount,
+          note = note
+        )
+      ) { select() }.decodeSingle<SettlementEntity>()
+
+      val profiles = postgrest["profiles"]
+        .select { filter { isIn("id", listOf(actualFromUserId, toUserId)) } }
+        .decodeList<ProfileEntity>()
+      val profileMap = profiles.associateBy { it.id }
+
+      val fromName = profileMap[actualFromUserId]?.username ?: "User"
+      val toName = profileMap[toUserId]?.username ?: "User"
+
+      // Ghi log hoạt động
+      try {
+        postgrest["activity_logs"].insert(
+          ActivityLogEntity(
             groupId = groupId,
-            toUserId = toUserId,
-            amount = amount,
-            note = note,
-            fromUserId = fromUserId
+            userId = actualFromUserId,
+            activityType = "SETTLEMENT_CREATED",
+            description = "$fromName đã trả cho $toName ${amount.toLong()} VND"
           )
         )
-      }.body()
-      Result.success(response)
+      } catch (_: Exception) {}
+
+      Result.success(
+        SettlementResponse(
+          id = entity.id ?: "",
+          groupId = groupId,
+          fromUserId = actualFromUserId,
+          fromUsername = fromName,
+          toUserId = toUserId,
+          toUsername = toName,
+          amount = amount,
+          note = note,
+          createdAt = entity.createdAt ?: ""
+        )
+      )
     } catch (e: Exception) {
       Result.failure(e)
     }

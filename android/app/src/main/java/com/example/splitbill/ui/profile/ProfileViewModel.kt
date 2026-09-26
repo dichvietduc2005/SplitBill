@@ -21,6 +21,9 @@ class ProfileViewModel(
 
   companion object {
     private var cachedState: ProfileUiState? = null
+    fun clearCache() {
+      cachedState = null
+    }
   }
 
   private val _uiState = MutableStateFlow<ProfileUiState>(

@@ -319,24 +319,30 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(Dimens.SpacingXL))
 
-            // Error display
-            if (uiState is LoginUiState.Error) {
-              Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f)),
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(bottom = Dimens.SpacingM)
-              ) {
+            // Inline Error display (Sleek Material 3)
+            androidx.compose.animation.AnimatedVisibility(
+              visible = uiState is LoginUiState.Error,
+              enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+              exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+            ) {
+              if (uiState is LoginUiState.Error) {
                 Row(
-                  modifier = Modifier.padding(Dimens.SpacingM),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Dimens.SpacingM, start = Dimens.SpacingXS, end = Dimens.SpacingXS),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Icon(Icons.Rounded.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                  Spacer(modifier = Modifier.width(Dimens.SpacingS))
+                  Icon(
+                    Icons.Rounded.Error, 
+                    contentDescription = null, 
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(16.dp)
+                  )
+                  Spacer(modifier = Modifier.width(Dimens.SpacingXS))
                   Text(
                     text = (uiState as LoginUiState.Error).message.localized(),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.bodyMedium
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
                   )
                 }
               }
@@ -346,7 +352,7 @@ fun LoginScreen(
             OutlinedTextField(
               value = username,
               onValueChange = { username = it },
-              label = { Text("Tên đăng nhập".localized()) },
+              label = { Text((if (isLoginMode) "Email hoặc Tên đăng nhập" else "Email hoặc Tên người dùng").localized()) },
               leadingIcon = {
                 Icon(
                   Icons.Rounded.Person,
