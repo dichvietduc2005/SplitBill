@@ -1,24 +1,41 @@
 package com.example.splitbill.data
 
-import com.example.splitbill.data.api.ApiService
 import com.example.splitbill.data.api.ProfileResponse
-import com.example.splitbill.data.api.UpdateBankInfoRequest
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.put
-import io.ktor.client.request.setBody
-import kotlinx.coroutines.flow.first
+import com.example.splitbill.data.supabase.ProfileEntity
+import com.example.splitbill.data.supabase.SupabaseConfig
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
+import java.util.UUID
 
 class ProfileRepository(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getCachedToken())
+  private val postgrest get() = SupabaseConfig.client.postgrest
+  private val storage get() = SupabaseConfig.client.storage
+  private val auth get() = SupabaseConfig.client.auth
 
   /** Lấy profile của người dùng đang đăng nhập */
   suspend fun getMyProfile(): Result<ProfileResponse> {
     return try {
-      val response: ProfileResponse = getClient().get("/api/profile").body()
-      Result.success(response)
+      val userId = auth.currentUserOrNull()?.id
+        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
+        ?: return Result.failure(Exception("Chưa đăng nhập"))
+
+      val profile = postgrest["profiles"]
+        .select { filter { eq("id", userId) } }
+        .decodeSingle<ProfileEntity>()
+
+      Result.success(
+        ProfileResponse(
+          id = profile.id,
+          username = profile.username,
+          email = profile.email,
+          avatarUrl = profile.avatarUrl,
+          bankCode = profile.bankCode,
+          accountNumber = profile.accountNumber,
+          accountName = profile.accountName
+        )
+      )
     } catch (e: Exception) {
       Result.failure(e)
     }
@@ -27,8 +44,21 @@ class ProfileRepository(private val tokenManager: TokenManager) {
   /** Lấy thông tin ngân hàng của một user khác để tạo QR code */
   suspend fun getUserProfile(userId: String): Result<ProfileResponse> {
     return try {
-      val response: ProfileResponse = getClient().get("/api/profile/$userId").body()
-      Result.success(response)
+      val profile = postgrest["profiles"]
+        .select { filter { eq("id", userId) } }
+        .decodeSingle<ProfileEntity>()
+
+      Result.success(
+        ProfileResponse(
+          id = profile.id,
+          username = profile.username,
+          email = profile.email,
+          avatarUrl = profile.avatarUrl,
+          bankCode = profile.bankCode,
+          accountNumber = profile.accountNumber,
+          accountName = profile.accountName
+        )
+      )
     } catch (e: Exception) {
       Result.failure(e)
     }
@@ -41,10 +71,16 @@ class ProfileRepository(private val tokenManager: TokenManager) {
     accountName: String
   ): Result<String> {
     return try {
-      val response: Map<String, String> = getClient().put("/api/profile/bank") {
-        setBody(UpdateBankInfoRequest(bankCode, accountNumber, accountName))
-      }.body()
-      Result.success(response["message"] ?: "Cập nhật thành công")
+      val userId = auth.currentUserOrNull()?.id
+        ?: return Result.failure(Exception("Chưa đăng nhập"))
+
+      postgrest["profiles"].update({
+        set("bank_code", bankCode)
+        set("account_number", accountNumber)
+        set("account_name", accountName)
+      }) { filter { eq("id", userId) } }
+
+      Result.success("Cập nhật thông tin ngân hàng thành công")
     } catch (e: Exception) {
       Result.failure(e)
     }
@@ -53,23 +89,21 @@ class ProfileRepository(private val tokenManager: TokenManager) {
   /** Upload ảnh đại diện */
   suspend fun uploadAvatar(imageBytes: ByteArray): Result<String> {
     return try {
-      val response: Map<String, String> = getClient().post("/api/profile/avatar") {
-        setBody(
-          io.ktor.client.request.forms.MultiPartFormDataContent(
-            io.ktor.client.request.forms.formData {
-              append(
-                key = "file",
-                value = imageBytes,
-                headers = io.ktor.http.Headers.build {
-                  append(io.ktor.http.HttpHeaders.ContentType, "image/jpeg")
-                  append(io.ktor.http.HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                }
-              )
-            }
-          )
-        )
-      }.body()
-      Result.success(response["avatarUrl"] ?: "")
+      val userId = auth.currentUserOrNull()?.id
+        ?: return Result.failure(Exception("Chưa đăng nhập"))
+
+      val fileName = "$userId/${UUID.randomUUID()}.jpg"
+      val bucket = storage["avatars"]
+      bucket.upload(fileName, imageBytes) {
+        upsert = true
+      }
+      val publicUrl = bucket.publicUrl(fileName)
+
+      postgrest["profiles"].update({
+        set("avatar_url", publicUrl)
+      }) { filter { eq("id", userId) } }
+
+      Result.success(publicUrl)
     } catch (e: Exception) {
       Result.failure(e)
     }

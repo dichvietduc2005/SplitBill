@@ -85,6 +85,9 @@ class SettingsViewModel(
 
   companion object {
     private var cachedProfileState: SettingsProfileUiState? = null
+    fun clearCache() {
+      cachedProfileState = null
+    }
   }
 
   init {

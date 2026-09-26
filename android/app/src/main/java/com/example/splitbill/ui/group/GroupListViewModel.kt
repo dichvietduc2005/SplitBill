@@ -23,6 +23,9 @@ class GroupListViewModel(
 
   companion object {
     private var cachedState: GroupListUiState? = null
+    fun clearCache() {
+      cachedState = null
+    }
   }
 
   private val _uiState = MutableStateFlow<GroupListUiState>(
@@ -65,9 +68,12 @@ class GroupListViewModel(
         }
         loadGroups() // Reload
       } else {
+        val errorMsg = result.exceptionOrNull()?.message ?: "Lỗi tạo nhóm"
         val currentState = _uiState.value
         if (currentState is GroupListUiState.Success) {
-          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: $errorMsg")
+        } else {
+          _uiState.value = GroupListUiState.Error(errorMsg)
         }
       }
     }
@@ -83,9 +89,12 @@ class GroupListViewModel(
         }
         loadGroups() // Reload
       } else {
+        val errorMsg = result.exceptionOrNull()?.message ?: "Lỗi tham gia nhóm"
         val currentState = _uiState.value
         if (currentState is GroupListUiState.Success) {
-          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: $errorMsg")
+        } else {
+          _uiState.value = GroupListUiState.Error(errorMsg)
         }
       }
     }
@@ -101,9 +110,12 @@ class GroupListViewModel(
         }
         loadGroups() // Reload
       } else {
+        val errorMsg = result.exceptionOrNull()?.message ?: "Lỗi tham gia bằng mã mời"
         val currentState = _uiState.value
         if (currentState is GroupListUiState.Success) {
-          _uiState.value = currentState.copy(actionMessage = "Lỗi: ${result.exceptionOrNull()?.message}")
+          _uiState.value = currentState.copy(actionMessage = "Lỗi: $errorMsg")
+        } else {
+          _uiState.value = GroupListUiState.Error(errorMsg)
         }
       }
     }

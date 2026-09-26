@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.android)
@@ -5,6 +7,13 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.services)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+val supabaseAnonKey = localProperties.getProperty("supabase.anon.key") ?: ""
 
 android {
     namespace = "com.example.splitbill"
@@ -15,6 +24,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "SUPABASE_URL", "\"https://qvqcvwepxluzatmzgiix.supabase.co\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     buildTypes {
@@ -30,7 +42,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 
@@ -111,6 +123,13 @@ dependencies {
   // Firebase Cloud Messaging
   implementation(platform(libs.firebase.bom))
   implementation(libs.firebase.messaging)
+
+  // Supabase SDK
+  implementation(platform(libs.supabase.bom))
+  implementation(libs.supabase.postgrest)
+  implementation(libs.supabase.auth)
+  implementation(libs.supabase.storage)
+  implementation(libs.supabase.realtime)
 
   // Jetpack Glance App Widget & WorkManager
   implementation("androidx.glance:glance-appwidget:1.1.1")

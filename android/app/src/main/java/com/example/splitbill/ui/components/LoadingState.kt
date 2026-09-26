@@ -3,8 +3,16 @@ package com.example.splitbill.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,8 +22,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.SplitBillShapes
 
@@ -124,6 +130,75 @@ fun EmptyState(
       color = MaterialTheme.colorScheme.onSurfaceVariant,
       textAlign = TextAlign.Center
     )
+  }
+}
+
+@Composable
+fun ErrorState(
+  title: String,
+  message: String,
+  onRetry: (() -> Unit)? = null,
+  modifier: Modifier = Modifier
+) {
+  Column(
+    modifier = modifier
+      .padding(Dimens.SpacingXL)
+      .fillMaxWidth(),
+    horizontalAlignment = Alignment.CenterHorizontally
+  ) {
+    Surface(
+      modifier = Modifier.size(80.dp),
+      shape = CircleShape,
+      color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+    ) {
+      Box(contentAlignment = Alignment.Center) {
+        Icon(
+          imageVector = Icons.Rounded.ErrorOutline,
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.error,
+          modifier = Modifier.size(38.dp)
+        )
+      }
+    }
+
+    Spacer(modifier = Modifier.height(Dimens.SpacingL))
+
+    Text(
+      text = title,
+      style = MaterialTheme.typography.titleMedium,
+      color = MaterialTheme.colorScheme.onSurface,
+      textAlign = TextAlign.Center
+    )
+
+    Spacer(modifier = Modifier.height(Dimens.SpacingXS))
+
+    Text(
+      text = message,
+      style = MaterialTheme.typography.bodyMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      textAlign = TextAlign.Center,
+      modifier = Modifier.padding(horizontal = Dimens.SpacingM)
+    )
+
+    if (onRetry != null) {
+      Spacer(modifier = Modifier.height(Dimens.SpacingL))
+      FilledTonalButton(
+        onClick = onRetry,
+        shape = SplitBillShapes.medium,
+        contentPadding = PaddingValues(
+          horizontal = Dimens.SpacingL,
+          vertical = Dimens.SpacingS
+        )
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.Refresh,
+          contentDescription = null,
+          modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(Dimens.SpacingS))
+        Text(text = "Thử lại", style = MaterialTheme.typography.labelLarge)
+      }
+    }
   }
 }
 

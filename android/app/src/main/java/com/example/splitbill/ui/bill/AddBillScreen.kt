@@ -461,7 +461,7 @@ fun AddBillScreen(
                   val selectedPayer = members.find { it.userId == selectedPayerId }
                   if (selectedPayer != null && !selectedPayer.avatarUrl.isNullOrBlank()) {
                     val avatarFullUrl = remember(selectedPayer.avatarUrl) {
-                      if (selectedPayer.avatarUrl.startsWith("http")) selectedPayer.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (selectedPayer.avatarUrl.startsWith("/")) "" else "/"}${selectedPayer.avatarUrl}"
+                      if (selectedPayer.avatarUrl.startsWith("http")) selectedPayer.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (selectedPayer.avatarUrl.startsWith("/")) "" else "/"}${selectedPayer.avatarUrl}"
                     }
                     coil3.compose.AsyncImage(
                       model = avatarFullUrl,
@@ -488,7 +488,7 @@ fun AddBillScreen(
                     leadingIcon = {
                       if (!member.avatarUrl.isNullOrBlank()) {
                         val avatarFullUrl = remember(member.avatarUrl) {
-                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
                         }
                         coil3.compose.AsyncImage(
                           model = avatarFullUrl,
@@ -582,7 +582,7 @@ fun AddBillScreen(
               ) {
                 if (!member.avatarUrl.isNullOrBlank()) {
                   val avatarFullUrl = remember(member.avatarUrl) {
-                    if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                    if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
                   }
                   coil3.compose.AsyncImage(
                     model = avatarFullUrl,
@@ -753,7 +753,7 @@ fun AddBillScreen(
                     }
                   }
                 } else if (existingBill?.receiptUrl != null) {
-                  val fullUrl = com.example.splitbill.data.api.ApiService.BASE_URL + existingBill.receiptUrl
+                  val fullUrl = if (existingBill.receiptUrl.startsWith("http")) existingBill.receiptUrl else com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL + existingBill.receiptUrl
                   Box(
                     modifier = Modifier
                       .fillMaxWidth()

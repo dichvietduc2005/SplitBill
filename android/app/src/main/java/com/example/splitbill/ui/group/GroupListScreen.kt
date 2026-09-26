@@ -123,10 +123,10 @@ fun GroupListScreen(
           GroupListSkeleton(modifier = Modifier.fillMaxSize())
         }
         is GroupListUiState.Error -> {
-          EmptyState(
-            title = "Đã xảy ra lỗi".localized(),
+          com.example.splitbill.ui.components.ErrorState(
+            title = "Không thể tải danh sách nhóm".localized(),
             message = state.message,
-            emoji = "⚠️",
+            onRetry = { viewModel.loadGroups() },
             modifier = Modifier.align(Alignment.Center)
           )
         }

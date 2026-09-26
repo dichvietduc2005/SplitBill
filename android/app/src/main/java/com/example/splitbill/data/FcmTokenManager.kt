@@ -1,25 +1,23 @@
 package com.example.splitbill.data
 
-import com.example.splitbill.data.api.ApiService
-import com.example.splitbill.data.api.RegisterFcmTokenRequest
-import io.ktor.client.request.delete
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import kotlinx.coroutines.flow.first
+import com.example.splitbill.data.supabase.SupabaseConfig
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
 
 class FcmTokenManager(private val tokenManager: TokenManager) {
 
-  private suspend fun getClient() = ApiService.createClient(tokenManager.getToken().first())
+  private val postgrest get() = SupabaseConfig.client.postgrest
+  private val auth get() = SupabaseConfig.client.auth
 
   suspend fun registerToken(token: String): Result<Unit> {
     return try {
-      val jwtToken = tokenManager.getToken().first()
-      if (jwtToken.isNullOrBlank()) {
+      val userId = auth.currentUserOrNull()?.id
+      if (userId == null) {
         return Result.failure(Exception("Not logged in"))
       }
-      getClient().post("/api/fcm/register") {
-        setBody(RegisterFcmTokenRequest(token))
-      }
+      postgrest["fcm_tokens"].upsert(
+        mapOf("user_id" to userId, "token" to token, "device_type" to "android")
+      )
       Result.success(Unit)
     } catch (e: Exception) {
       Result.failure(e)
@@ -28,11 +26,8 @@ class FcmTokenManager(private val tokenManager: TokenManager) {
 
   suspend fun unregisterToken(): Result<Unit> {
     return try {
-      val jwtToken = tokenManager.getToken().first()
-      if (jwtToken.isNullOrBlank()) {
-        return Result.success(Unit)
-      }
-      getClient().delete("/api/fcm/unregister")
+      val userId = auth.currentUserOrNull()?.id ?: return Result.success(Unit)
+      postgrest["fcm_tokens"].delete { filter { eq("user_id", userId) } }
       Result.success(Unit)
     } catch (e: Exception) {
       Result.failure(e)

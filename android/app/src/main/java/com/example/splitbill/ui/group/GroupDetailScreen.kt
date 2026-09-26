@@ -896,7 +896,7 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
     ) {
       if (!member.avatarUrl.isNullOrBlank()) {
         val avatarFullUrl = remember(member.avatarUrl) {
-          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.api.ApiService.BASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
         }
         AsyncImage(
           model = avatarFullUrl,
@@ -1116,7 +1116,7 @@ private fun BillCard(
             Spacer(Modifier.height(Dimens.SpacingS))
             Text("Ảnh hóa đơn:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(Dimens.SpacingXS))
-            val fullUrl = com.example.splitbill.data.api.ApiService.BASE_URL + bill.receiptUrl
+            val fullUrl = if (bill.receiptUrl.startsWith("http")) bill.receiptUrl else com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL + bill.receiptUrl
             AsyncImage(
               model = fullUrl,
               contentDescription = "Ảnh hóa đơn",

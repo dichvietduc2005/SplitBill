@@ -1,68 +1,147 @@
 package com.example.splitbill.data
 
-import com.example.splitbill.data.api.ApiService
-import com.example.splitbill.data.api.AuthResponse
-import com.example.splitbill.data.api.LoginRequest
-import com.example.splitbill.data.api.RegisterRequest
-import io.ktor.client.call.body
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
+import com.example.splitbill.data.supabase.ProfileEntity
+import com.example.splitbill.data.supabase.SupabaseConfig
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class AuthRepository(private val tokenManager: TokenManager) {
   
-  suspend fun login(username: String, password: String): Result<String> {
-    return try {
-      val client = ApiService.createClient() // No token for login
-      val response: AuthResponse = client.post("/api/auth/login") {
-        setBody(LoginRequest(username, password))
-      }.body()
-      
-      tokenManager.saveToken(response.token)
-      tokenManager.saveBiometricToken(response.token)
-      Result.success(response.token)
-    } catch (e: Exception) {
-      Result.failure(parseException(e))
-    }
+  private fun clearAllCaches() {
+    com.example.splitbill.ui.group.GroupListViewModel.clearCache()
+    com.example.splitbill.ui.profile.ProfileViewModel.clearCache()
+    com.example.splitbill.ui.settings.SettingsViewModel.clearCache()
   }
 
-  suspend fun register(username: String, password: String): Result<String> {
+  suspend fun login(emailOrUsername: String, password: String): Result<String> {
     return try {
-      val client = ApiService.createClient()
-      val response: AuthResponse = client.post("/api/auth/register") {
-        setBody(RegisterRequest(username, "$username@example.com", password))
-      }.body()
+      clearAllCaches()
+      val email = if (emailOrUsername.contains("@")) emailOrUsername.trim() else "${emailOrUsername.trim()}@splitbill.app"
+      val auth = SupabaseConfig.client.auth
       
-      tokenManager.saveToken(response.token)
-      tokenManager.saveBiometricToken(response.token)
-      Result.success(response.token)
-    } catch (e: Exception) {
-      Result.failure(parseException(e))
-    }
-  }
-
-  private suspend fun parseException(e: Exception): Exception {
-    if (e is io.ktor.client.plugins.ResponseException) {
       try {
-        val errorText = e.response.bodyAsText()
-        val json = org.json.JSONObject(errorText)
-        if (json.has("message")) {
-          return Exception(json.getString("message"))
-        }
+        auth.signOut()
       } catch (_: Exception) {}
+      
+      auth.signInWith(Email) {
+        this.email = email
+        this.password = password
+      }
+      val token = auth.currentAccessTokenOrNull() 
+        ?: auth.currentSessionOrNull()?.accessToken 
+        ?: "supabase_session"
+      
+      tokenManager.saveToken(token)
+      tokenManager.saveBiometricToken(token)
+
+      // Đảm bảo profile tồn tại (tránh FK violation khi tạo nhóm)
+      upsertProfile()
+
+      Result.success(token)
+    } catch (e: Exception) {
+      Result.failure(Exception(e.message ?: "Đăng nhập thất bại"))
     }
-    return e
+  }
+
+  suspend fun register(username: String, password: String, emailInput: String? = null): Result<String> {
+    return try {
+      clearAllCaches()
+      try {
+        SupabaseConfig.client.auth.signOut()
+      } catch (_: Exception) {}
+      tokenManager.deleteToken()
+      tokenManager.deleteBiometricToken()
+
+      val email = if (!emailInput.isNullOrBlank() && emailInput.contains("@")) {
+        emailInput.trim()
+      } else {
+        "${username.trim()}@splitbill.app"
+      }
+      val auth = SupabaseConfig.client.auth
+      auth.signUpWith(Email) {
+        this.email = email
+        this.password = password
+        data = buildJsonObject {
+          put("username", username.trim())
+        }
+      }
+
+      // Nếu Supabase không tự động tạo session khi signUp, đăng nhập luôn
+      if (auth.currentSessionOrNull() == null) {
+        auth.signInWith(Email) {
+          this.email = email
+          this.password = password
+        }
+      }
+
+      val token = auth.currentAccessTokenOrNull() 
+        ?: auth.currentSessionOrNull()?.accessToken 
+        ?: "supabase_session"
+
+      tokenManager.saveToken(token)
+      tokenManager.saveBiometricToken(token)
+
+      // Đảm bảo profile tồn tại (trigger DB có thể bị chậm)
+      upsertProfile()
+
+      Result.success(token)
+    } catch (e: Exception) {
+      Result.failure(Exception(e.message ?: "Đăng ký thất bại"))
+    }
   }
 
   suspend fun logout() {
+    try {
+      SupabaseConfig.client.auth.signOut()
+    } catch (_: Exception) {}
     tokenManager.deleteToken()
     tokenManager.deleteBiometricToken()
+    clearAllCaches()
   }
 
   suspend fun isLoggedIn(): Boolean {
+    val session = SupabaseConfig.client.auth.currentSessionOrNull()
+    if (session != null) return true
     val token = tokenManager.getToken().first()
     return !token.isNullOrBlank()
+  }
+
+  suspend fun getCurrentUserId(): String? {
+    return SupabaseConfig.client.auth.currentUserOrNull()?.id
+      ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
+  }
+
+  /**
+   * Upsert profile cho user hiện tại vào bảng profiles.
+   * Cần thiết vì DB trigger có thể bị chậm hoặc user cũ chưa có profile.
+   */
+  private suspend fun upsertProfile() {
+    try {
+      val auth = SupabaseConfig.client.auth
+      val user = auth.currentUserOrNull() ?: return
+      val username = user.userMetadata?.get("username")?.toString()
+        ?.trim('"')
+        ?: user.email?.substringBefore('@')
+        ?: "user_${user.id.take(6)}"
+
+      SupabaseConfig.client.postgrest["profiles"].upsert(
+        ProfileEntity(
+          id = user.id,
+          email = user.email ?: "",
+          username = username,
+          avatarUrl = null
+        )
+      ) { onConflict = "id" }
+
+      android.util.Log.d("SplitBill_Auth", "Profile upserted: ${user.id}")
+    } catch (e: Exception) {
+      // Không fail login vì lỗi upsert profile
+      android.util.Log.w("SplitBill_Auth", "upsertProfile warning: ${e.message}")
+    }
   }
 
   suspend fun hasBiometricToken(): Boolean {
