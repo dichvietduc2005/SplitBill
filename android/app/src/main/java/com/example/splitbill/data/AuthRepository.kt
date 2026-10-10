@@ -31,9 +31,15 @@ class AuthRepository(private val tokenManager: TokenManager) {
         this.email = email
         this.password = password
       }
-      val token = auth.currentAccessTokenOrNull() 
-        ?: auth.currentSessionOrNull()?.accessToken 
-        ?: "supabase_session"
+      val currentSession = auth.currentSessionOrNull()
+      val token = if (currentSession != null && !currentSession.refreshToken.isNullOrBlank()) {
+          val json = org.json.JSONObject()
+          json.put("access_token", currentSession.accessToken)
+          json.put("refresh_token", currentSession.refreshToken)
+          json.toString()
+      } else {
+          auth.currentAccessTokenOrNull() ?: currentSession?.accessToken ?: "supabase_session"
+      }
       
       tokenManager.saveToken(token)
       tokenManager.saveBiometricToken(token)
@@ -78,9 +84,15 @@ class AuthRepository(private val tokenManager: TokenManager) {
         }
       }
 
-      val token = auth.currentAccessTokenOrNull() 
-        ?: auth.currentSessionOrNull()?.accessToken 
-        ?: "supabase_session"
+      val currentSession = auth.currentSessionOrNull()
+      val token = if (currentSession != null && !currentSession.refreshToken.isNullOrBlank()) {
+          val json = org.json.JSONObject()
+          json.put("access_token", currentSession.accessToken)
+          json.put("refresh_token", currentSession.refreshToken)
+          json.toString()
+      } else {
+          auth.currentAccessTokenOrNull() ?: currentSession?.accessToken ?: "supabase_session"
+      }
 
       tokenManager.saveToken(token)
       tokenManager.saveBiometricToken(token)
@@ -107,7 +119,11 @@ class AuthRepository(private val tokenManager: TokenManager) {
     val session = SupabaseConfig.client.auth.currentSessionOrNull()
     if (session != null) return true
     val token = tokenManager.getToken().first()
-    return !token.isNullOrBlank()
+    if (!token.isNullOrBlank()) {
+      SupabaseConfig.ensureSession(token)
+      return true
+    }
+    return false
   }
 
   suspend fun getCurrentUserId(): String? {
