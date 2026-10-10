@@ -9,10 +9,18 @@ import com.example.splitbill.data.api.BillResponse
 import com.example.splitbill.data.api.GroupResponse
 import com.example.splitbill.data.api.MemberResponse
 import com.example.splitbill.data.api.InviteResponse
+import com.example.splitbill.data.supabase.SupabaseConfig
+import io.github.jan.supabase.realtime.realtime
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.RealtimeChannel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import com.example.splitbill.service.NotificationEventBus
 
@@ -44,14 +52,54 @@ class GroupDetailViewModel(
   )
   val state: StateFlow<GroupDetailState> = _state.asStateFlow()
 
+  private var realtimeChannel: RealtimeChannel? = null
+
   init {
     loadAll() // Refresh ngầm trong nền
+    subscribeRealtime()
     viewModelScope.launch {
       NotificationEventBus.events.collect { event ->
         if (event.groupId == groupId) {
           loadAll()
         }
       }
+    }
+  }
+
+  /** Subscribe Supabase Realtime để nhận live updates cho bills & settlements */
+  private fun subscribeRealtime() {
+    viewModelScope.launch {
+      try {
+        val client = SupabaseConfig.client
+        val channel = client.channel("group-$groupId")
+        realtimeChannel = channel
+
+        // Lắng nghe thay đổi bảng bills
+        channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+          table = "bills"
+        }.onEach {
+          loadAll()
+        }.launchIn(viewModelScope)
+
+        // Lắng nghe thay đổi bảng settlements
+        channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+          table = "settlements"
+        }.onEach {
+          loadAll()
+        }.launchIn(viewModelScope)
+
+        channel.subscribe()
+      } catch (e: Exception) {
+        // Realtime không bắt buộc — nếu lỗi vẫn tiếp tục với pull-to-refresh
+        e.printStackTrace()
+      }
+    }
+  }
+
+  override fun onCleared() {
+    super.onCleared()
+    viewModelScope.launch {
+      try { realtimeChannel?.unsubscribe() } catch (_: Exception) {}
     }
   }
 

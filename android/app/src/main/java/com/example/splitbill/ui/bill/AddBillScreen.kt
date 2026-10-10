@@ -3,8 +3,12 @@ package com.example.splitbill.ui.bill
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,10 +25,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.splitbill.data.api.BillSplitItem
 import com.example.splitbill.data.api.MemberResponse
@@ -111,46 +117,75 @@ fun AddBillScreen(
     }
   }
 
-  // Pre-populate splits if in edit mode
+  // Map: userId -> is participating in the bill
+  val activeMemberIds = remember { mutableStateMapOf<String, Boolean>() }
+
+  // Pre-populate splits and active members if in edit mode
   LaunchedEffect(existingBill, members) {
     if (existingBill != null && members.isNotEmpty()) {
       splitAmounts.clear()
+      val participantIds = existingBill.splits.filter { it.amountOwed > 0 }.map { it.userId }.toSet()
+      members.forEach { m ->
+        activeMemberIds[m.userId] = participantIds.contains(m.userId)
+      }
       existingBill.splits.forEach { split ->
         splitAmounts[split.userId] = String.format(Locale.US, "%,d", split.amountOwed.toLong())
       }
       val total = existingBill.totalAmount
-      val perPerson = Math.floor(total / members.size)
-      val isEachEqual = existingBill.splits.all { Math.abs(it.amountOwed - perPerson) <= 2.0 || Math.abs(it.amountOwed - (perPerson + (total - perPerson * members.size))) <= 2.0 }
+      val activeCount = if (participantIds.isNotEmpty()) participantIds.size else members.size
+      val perPerson = Math.floor(total / activeCount)
+      val isEachEqual = existingBill.splits.filter { it.amountOwed > 0 }.all { 
+        Math.abs(it.amountOwed - perPerson) <= 2.0 || Math.abs(it.amountOwed - (perPerson + (total - perPerson * activeCount))) <= 2.0 
+      }
       splitMode = if (isEachEqual) SplitMode.EQUAL else SplitMode.CUSTOM
+    } else {
+      members.forEach { m ->
+        if (!activeMemberIds.containsKey(m.userId)) {
+          activeMemberIds[m.userId] = true
+        }
+      }
     }
   }
 
-  // Auto-fill equal splits when amount, currency, exchange rate, or payer changes
-  LaunchedEffect(totalAmountText, splitMode, selectedCurrency, exchangeRateText, selectedPayerId) {
+  // Auto-fill equal splits when amount, active members, currency, exchange rate, or payer changes
+  LaunchedEffect(totalAmountText, splitMode, selectedCurrency, exchangeRateText, selectedPayerId, activeMemberIds.toMap()) {
     if (splitMode == SplitMode.EQUAL && members.isNotEmpty()) {
-      val total = totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
+      val total = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
       val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
+      val activeMembers = members.filter { activeMemberIds[it.userId] != false }
       
+      if (activeMembers.isEmpty()) {
+        members.forEach { splitAmounts[it.userId] = "" }
+        return@LaunchedEffect
+      }
+
       if (selectedCurrency == "VND" || rate <= 1.0) {
-        val perPerson = Math.floor(total / members.size)
-        val remainder = total - (perPerson * members.size)
+        val perPerson = Math.floor(total / activeMembers.size)
+        val remainder = total - (perPerson * activeMembers.size)
         
         members.forEach { member ->
-          val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == members.first())
-          val finalAmount = if (isPayer) perPerson + remainder else perPerson
-          splitAmounts[member.userId] = if (finalAmount > 0) String.format(Locale.US, "%,d", finalAmount.toLong()) else ""
+          if (activeMemberIds[member.userId] == false) {
+            splitAmounts[member.userId] = ""
+          } else {
+            val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == activeMembers.first())
+            val finalAmount = if (isPayer) perPerson + remainder else perPerson
+            splitAmounts[member.userId] = if (finalAmount > 0) String.format(Locale.US, "%,d", finalAmount.toLong()) else ""
+          }
         }
       } else {
-        // Cách 1: Quy đổi ra VNĐ trước rồi chia (Không bị lẻ cent USD)
         val totalVnd = total * rate
-        val perPersonVnd = Math.floor(totalVnd / members.size)
-        val remainderVnd = totalVnd - (perPersonVnd * members.size)
+        val perPersonVnd = Math.floor(totalVnd / activeMembers.size)
+        val remainderVnd = totalVnd - (perPersonVnd * activeMembers.size)
         
         members.forEach { member ->
-          val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == members.first())
-          val finalVnd = if (isPayer) perPersonVnd + remainderVnd else perPersonVnd
-          val foreignAmount = finalVnd / rate
-          splitAmounts[member.userId] = if (foreignAmount > 0) String.format(Locale.US, "%.2f", foreignAmount) else ""
+          if (activeMemberIds[member.userId] == false) {
+            splitAmounts[member.userId] = ""
+          } else {
+            val isPayer = member.userId == selectedPayerId || (selectedPayerId.isBlank() && member == activeMembers.first())
+            val finalVnd = if (isPayer) perPersonVnd + remainderVnd else perPersonVnd
+            val foreignAmount = finalVnd / rate
+            splitAmounts[member.userId] = if (foreignAmount > 0) String.format(Locale.US, "%.2f", foreignAmount) else ""
+          }
         }
       }
     }
@@ -222,11 +257,14 @@ fun AddBillScreen(
       }
 
       if (pushEnabled) {
+        val createdBillId = (uiState as? com.example.splitbill.ui.bill.AddBillUiState.Success)?.billId
         com.example.splitbill.utils.NotificationHelper.showBillNotification(
           context = context,
+          groupId = groupId,
+          billId = createdBillId,
           groupName = pushGroupName,
           billDescription = if (isEditMode) "Cập nhật: $description" else description,
-          amount = totalAmountText + selectedCurrency
+          amount = totalAmountText + " " + selectedCurrency
         )
       }
       
@@ -318,49 +356,93 @@ fun AddBillScreen(
                   color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
                 Spacer(Modifier.height(Dimens.SpacingXS))
-                OutlinedTextField(
-                  value = totalAmountText,
-                  onValueChange = { input -> 
-                    if (selectedCurrency == "VND") {
-                      val clean = input.filter { it.isDigit() }
-                      if (clean.isNotEmpty()) {
-                        try {
-                          totalAmountText = String.format(Locale.US, "%,d", clean.toLong())
-                        } catch (e: Exception) { }
-                      } else {
-                        totalAmountText = ""
-                      }
-                    } else {
-                      if (input.isEmpty() || input.all { it.isDigit() || it == '.' }) {
-                        if (input.count { it == '.' } <= 1) {
-                          totalAmountText = input
-                        }
-                      }
-                    }
-                  },
-                  textStyle = MaterialTheme.typography.displayMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                  ),
-                  colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                  ),
-                  placeholder = {
+                // Auto-scaling amount input
+                val hasMathInput = totalAmountText.any { it == '+' || it == '*' || it == '/' || it.equals('k', ignoreCase = true) }
+                val liveAmtFormatted = remember(totalAmountText) {
+                  val raw = totalAmountText.replace(",", "").toLongOrNull()
+                  if (raw != null && !hasMathInput) String.format(java.util.Locale.US, "%,d", raw) else null
+                }
+                val amountFontSize = when {
+                  totalAmountText.length > 14 -> 28.sp
+                  totalAmountText.length > 10 -> 36.sp
+                  else -> 52.sp
+                }
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { },
+                  contentAlignment = Alignment.Center
+                ) {
+                  if (totalAmountText.isEmpty()) {
                     Text(
                       "0",
-                      style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                      modifier = Modifier.fillMaxWidth(),
+                      fontSize = amountFontSize,
+                      fontWeight = FontWeight.Bold,
+                      textAlign = TextAlign.Center,
                       color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f)
                     )
-                  },
-                  modifier = Modifier.fillMaxWidth(),
-                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                  singleLine = true,
-                  suffix = { Text(selectedCurrency, style = MaterialTheme.typography.headlineMedium) }
-                )
+                  }
+                  androidx.compose.foundation.text.BasicTextField(
+                    value = totalAmountText,
+                    onValueChange = { input ->
+                      val validChars = input.filter { it.isDigit() || it == '+' || it == '-' || it == '*' || it == '/' || it == '.' || it == ',' || it == 'k' || it == 'K' || it == ' ' }
+                      totalAmountText = validChars
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                      fontSize = amountFontSize,
+                      fontWeight = FontWeight.Bold,
+                      textAlign = TextAlign.Center,
+                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    visualTransformation = remember { ThousandSeparatorVisualTransformation('.') },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    decorationBox = { innerTextField ->
+                      Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxWidth()
+                      ) {
+                        innerTextField()
+                      }
+                    }
+                  )
+                }
+
+                // Live calculation preview badge
+                val liveEvaluated = remember(totalAmountText) { evaluateMathExpression(totalAmountText) }
+                val hasMath = totalAmountText.any { it == '+' || it == '-' || it == '*' || it == '/' || it.equals('k', ignoreCase = true) }
+                if (hasMath && liveEvaluated != null) {
+                  Spacer(Modifier.height(Dimens.SpacingXS))
+                  Row(
+                    modifier = Modifier
+                      .clip(RoundedCornerShape(8.dp))
+                      .background(MaterialTheme.colorScheme.primaryContainer)
+                      .clickable {
+                        totalAmountText = if (selectedCurrency == "VND") String.format(Locale.US, "%,d", liveEvaluated.toLong()) else String.format(Locale.US, "%.2f", liveEvaluated)
+                      }
+                      .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  ) {
+                    Icon(
+                      Icons.Rounded.Calculate,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                      text = "= ${String.format(Locale.US, if (selectedCurrency == "VND") "%,d" else "%.2f", if (selectedCurrency == "VND") liveEvaluated.toLong() else liveEvaluated)} $selectedCurrency",
+                      style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                      text = "(Chạm để áp dụng)",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                  }
+                }
 
                 if (selectedCurrency != "VND") {
                   Spacer(Modifier.height(Dimens.SpacingS))
@@ -558,6 +640,110 @@ fun AddBillScreen(
           }
         }
 
+        // --- Quick Avatar Chips Participant Selector ---
+        item {
+          var visible by rememberSaveable { mutableStateOf(false) }
+          LaunchedEffect(Unit) { kotlinx.coroutines.delay((3.5 * Motion.StaggerDelay).toLong()); visible = true }
+          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = Dimens.SpacingM)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  "Người tham gia (${activeMemberIds.values.count { it }}/${members.size})",
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                TextButton(
+                  onClick = {
+                    val allActive = members.all { activeMemberIds[it.userId] != false }
+                    members.forEach { m -> activeMemberIds[m.userId] = !allActive }
+                  }
+                ) {
+                  val allActive = members.all { activeMemberIds[it.userId] != false }
+                  Text(if (allActive) "Bỏ chọn tất cả" else "Chọn tất cả", style = MaterialTheme.typography.labelMedium)
+                }
+              }
+              Spacer(Modifier.height(Dimens.SpacingXS))
+              LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM),
+                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                items(members, key = { it.userId }) { member ->
+                  val isSelected = activeMemberIds[member.userId] != false
+                  Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                      .clip(RoundedCornerShape(12.dp))
+                      .clickable {
+                        activeMemberIds[member.userId] = !isSelected
+                      }
+                      .padding(horizontal = 4.dp, vertical = 6.dp)
+                  ) {
+                    Box(
+                      modifier = Modifier.size(52.dp),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      if (!member.avatarUrl.isNullOrBlank()) {
+                        val avatarFullUrl = remember(member.avatarUrl) {
+                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                        }
+                        coil3.compose.AsyncImage(
+                          model = avatarFullUrl,
+                          contentDescription = member.username,
+                          modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .graphicsLayer(alpha = if (isSelected) 1f else 0.35f),
+                          contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                      } else {
+                        Box(modifier = Modifier.graphicsLayer(alpha = if (isSelected) 1f else 0.35f)) {
+                          com.example.splitbill.ui.components.GradientAvatar(name = member.username, size = 48.dp)
+                        }
+                      }
+
+                      if (isSelected) {
+                        Box(
+                          modifier = Modifier
+                            .size(20.dp)
+                            .align(Alignment.BottomEnd)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                          contentAlignment = Alignment.Center
+                        ) {
+                          Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(14.dp)
+                          )
+                        }
+                      }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                      text = member.username,
+                      style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                      ),
+                      color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                      maxLines = 1,
+                      overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                      modifier = Modifier.widthIn(max = 68.dp),
+                      textAlign = TextAlign.Center
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // --- Split Inputs per member ---
         item {
           var visible by rememberSaveable { mutableStateOf(false) }
@@ -568,12 +754,13 @@ fun AddBillScreen(
         }
         
         itemsIndexed(members) { index, member ->
+          val isParticipating = activeMemberIds[member.userId] != false
           var visible by rememberSaveable { mutableStateOf(false) }
           LaunchedEffect(Unit) { kotlinx.coroutines.delay((5 + index) * Motion.StaggerDelay); visible = true }
           AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(index)) {
             SplitBillCard(
               modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-              containerColor = if (splitAmounts[member.userId]?.isNotEmpty() == true) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+              containerColor = if (isParticipating && splitAmounts[member.userId]?.isNotEmpty() == true) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
             ) {
               Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -587,61 +774,54 @@ fun AddBillScreen(
                   coil3.compose.AsyncImage(
                     model = avatarFullUrl,
                     contentDescription = member.username,
-                    modifier = Modifier.size(40.dp).clip(CircleShape),
+                    modifier = Modifier.size(40.dp).clip(CircleShape).graphicsLayer(alpha = if (isParticipating) 1f else 0.4f),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                   )
                 } else {
-                  com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+                  Box(modifier = Modifier.graphicsLayer(alpha = if (isParticipating) 1f else 0.4f)) {
+                    com.example.splitbill.ui.components.GradientAvatar(name = member.username)
+                  }
                 }
                 Text(
                   member.username,
-                  style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                  style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isParticipating) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                  ),
                   modifier = Modifier.weight(1f)
                 )
-                when (splitMode) {
-                  SplitMode.EQUAL -> {
-                    Text(
-                      text = (splitAmounts[member.userId] ?: "0") + selectedCurrency,
-                      style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                  }
-                  SplitMode.CUSTOM -> {
-                    OutlinedTextField(
-                      value = splitAmounts[member.userId] ?: "",
-                      onValueChange = { input -> 
-                        if (selectedCurrency == "VND") {
-                          val clean = input.filter { it.isDigit() }
-                          if (clean.isNotEmpty()) {
-                            try {
-                              splitAmounts[member.userId] = String.format(Locale.US, "%,d", clean.toLong())
-                            } catch (e: Exception) { }
-                          } else {
-                            splitAmounts[member.userId] = ""
-                          }
-                        } else {
-                          if (input.isEmpty() || input.all { it.isDigit() || it == '.' }) {
-                            if (input.count { it == '.' } <= 1) {
-                              splitAmounts[member.userId] = input
-                            }
-                          }
-                        }
-                      },
-                      modifier = Modifier.width(120.dp),
-                      textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
-                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                      singleLine = true,
-                      shape = RoundedCornerShape(12.dp),
-                      suffix = { Text(selectedCurrency) }
-                    )
-                  }
-                  SplitMode.PERCENTAGE -> {
-                    Column(horizontalAlignment = Alignment.End) {
+                if (!isParticipating) {
+                  Text(
+                    text = "Không tham gia",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                  )
+                } else {
+                  when (splitMode) {
+                    SplitMode.EQUAL -> {
+                      Text(
+                        text = (splitAmounts[member.userId] ?: "0") + selectedCurrency,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                      )
+                    }
+                    SplitMode.CUSTOM -> {
                       OutlinedTextField(
-                        value = splitPercentages[member.userId] ?: "",
+                        value = splitAmounts[member.userId] ?: "",
                         onValueChange = { input -> 
-                          val clean = input.filter { it.isDigit() || it == '.' }
-                          if (clean.count { it == '.' } <= 1) {
-                            splitPercentages[member.userId] = clean
+                          if (selectedCurrency == "VND") {
+                            val clean = input.filter { it.isDigit() }
+                            if (clean.isNotEmpty()) {
+                              try {
+                                splitAmounts[member.userId] = String.format(Locale.US, "%,d", clean.toLong())
+                              } catch (e: Exception) { }
+                            } else {
+                              splitAmounts[member.userId] = ""
+                            }
+                          } else {
+                            if (input.isEmpty() || input.all { it.isDigit() || it == '.' }) {
+                              if (input.count { it == '.' } <= 1) {
+                                splitAmounts[member.userId] = input
+                              }
+                            }
                           }
                         },
                         modifier = Modifier.width(120.dp),
@@ -649,58 +829,77 @@ fun AddBillScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
-                        suffix = { Text("%") }
+                        suffix = { Text(selectedCurrency) }
                       )
-                      val amt = splitAmounts[member.userId] ?: ""
-                      if (amt.isNotEmpty()) {
-                        Text(
-                          text = "${amt}${selectedCurrency}",
-                          style = MaterialTheme.typography.labelSmall,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                      }
                     }
-                  }
-                  SplitMode.SHARES -> {
-                    Column(horizontalAlignment = Alignment.End) {
-                      Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                      ) {
-                        IconButton(
-                          onClick = {
-                            val current = splitShares[member.userId]?.toIntOrNull() ?: 1
-                            if (current > 1) {
-                              splitShares[member.userId] = (current - 1).toString()
+                    SplitMode.PERCENTAGE -> {
+                      Column(horizontalAlignment = Alignment.End) {
+                        OutlinedTextField(
+                          value = splitPercentages[member.userId] ?: "",
+                          onValueChange = { input -> 
+                            val clean = input.filter { it.isDigit() || it == '.' }
+                            if (clean.count { it == '.' } <= 1) {
+                              splitPercentages[member.userId] = clean
                             }
                           },
-                          modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                        ) {
-                          Icon(Icons.Rounded.Remove, contentDescription = "Giảm", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
-                        }
-                        Text(
-                          text = splitShares[member.userId] ?: "1",
-                          style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                          modifier = Modifier.width(20.dp),
-                          textAlign = TextAlign.Center
+                          modifier = Modifier.width(120.dp),
+                          textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
+                          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                          singleLine = true,
+                          shape = RoundedCornerShape(12.dp),
+                          suffix = { Text("%") }
                         )
-                        IconButton(
-                          onClick = {
-                            val current = splitShares[member.userId]?.toIntOrNull() ?: 1
-                            splitShares[member.userId] = (current + 1).toString()
-                          },
-                          modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                        ) {
-                          Icon(Icons.Rounded.Add, contentDescription = "Tăng", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                        val amt = splitAmounts[member.userId] ?: ""
+                        if (amt.isNotEmpty()) {
+                          Text(
+                            text = "${amt}${selectedCurrency}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                          )
                         }
                       }
-                      val amt = splitAmounts[member.userId] ?: ""
-                      if (amt.isNotEmpty()) {
-                        Text(
-                          text = "${amt}${selectedCurrency}",
-                          style = MaterialTheme.typography.labelSmall,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    }
+                    SplitMode.SHARES -> {
+                      Column(horizontalAlignment = Alignment.End) {
+                        Row(
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                          IconButton(
+                            onClick = {
+                              val current = splitShares[member.userId]?.toIntOrNull() ?: 1
+                              if (current > 1) {
+                                splitShares[member.userId] = (current - 1).toString()
+                              }
+                            },
+                            modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                          ) {
+                            Icon(Icons.Rounded.Remove, contentDescription = "Giảm", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                          }
+                          Text(
+                            text = splitShares[member.userId] ?: "1",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.width(20.dp),
+                            textAlign = TextAlign.Center
+                          )
+                          IconButton(
+                            onClick = {
+                              val current = splitShares[member.userId]?.toIntOrNull() ?: 1
+                              splitShares[member.userId] = (current + 1).toString()
+                            },
+                            modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                          ) {
+                            Icon(Icons.Rounded.Add, contentDescription = "Tăng", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                          }
+                        }
+                        val amt = splitAmounts[member.userId] ?: ""
+                        if (amt.isNotEmpty()) {
+                          Text(
+                            text = "${amt}${selectedCurrency}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                          )
+                        }
                       }
                     }
                   }
@@ -801,7 +1000,7 @@ fun AddBillScreen(
               Spacer(Modifier.height(Dimens.SpacingM))
               com.example.splitbill.ui.components.GradientButton(
                 onClick = {
-                  val total = totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
+                  val total = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
                   val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
                   val splits = members.mapNotNull { member ->
                     val amount = splitAmounts[member.userId]?.replace(",", "")?.toDoubleOrNull() ?: 0.0
@@ -887,6 +1086,63 @@ fun AddBillScreen(
 
 enum class SplitMode { EQUAL, CUSTOM, PERCENTAGE, SHARES }
 
+fun evaluateMathExpression(input: String): Double? {
+  try {
+    val clean = input.replace(",", "")
+      .replace(Regex("(?i)(\\d+(?:\\.\\d+)?)k"), "$1*1000")
+      .replace(" ", "")
+    if (clean.isBlank()) return null
+    if (!clean.any { it == '+' || it == '-' || it == '*' || it == '/' }) {
+      return clean.toDoubleOrNull()
+    }
+    val tokens = mutableListOf<String>()
+    var num = StringBuilder()
+    for (ch in clean) {
+      if (ch.isDigit() || ch == '.') {
+        num.append(ch)
+      } else if (ch == '+' || ch == '-' || ch == '*' || ch == '/') {
+        if (num.isNotEmpty()) {
+          tokens.add(num.toString())
+          num = StringBuilder()
+        }
+        tokens.add(ch.toString())
+      }
+    }
+    if (num.isNotEmpty()) tokens.add(num.toString())
+    if (tokens.isEmpty()) return null
+    val intermediate = mutableListOf<String>()
+    var i = 0
+    while (i < tokens.size) {
+      val t = tokens[i]
+      if (t == "*" || t == "/") {
+        if (intermediate.isEmpty() || i + 1 >= tokens.size) return null
+        val prev = intermediate.removeAt(intermediate.size - 1).toDoubleOrNull() ?: return null
+        val next = tokens[i + 1].toDoubleOrNull() ?: return null
+        val res = if (t == "*") prev * next else if (next != 0.0) prev / next else return null
+        intermediate.add(res.toString())
+        i += 2
+      } else {
+        intermediate.add(t)
+        i++
+      }
+    }
+    if (intermediate.isEmpty()) return null
+    var total = intermediate[0].toDoubleOrNull() ?: return null
+    var j = 1
+    while (j < intermediate.size) {
+      val op = intermediate[j]
+      if (j + 1 >= intermediate.size) break
+      val next = intermediate[j + 1].toDoubleOrNull() ?: return null
+      if (op == "+") total += next
+      else if (op == "-") total -= next
+      j += 2
+    }
+    return if (total >= 0) total else null
+  } catch (e: Exception) {
+    return null
+  }
+}
+
 private fun compressReceiptImage(context: android.content.Context, uri: android.net.Uri): ByteArray? {
   return try {
     val inputStream = context.contentResolver.openInputStream(uri) ?: return null
@@ -910,4 +1166,47 @@ private fun compressReceiptImage(context: android.content.Context, uri: android.
   }
 }
 
-
+class ThousandSeparatorVisualTransformation(val separator: Char = '.') : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val original = text.text
+        if (original.isEmpty() || original.any { !it.isDigit() }) {
+            return androidx.compose.ui.text.input.TransformedText(text, androidx.compose.ui.text.input.OffsetMapping.Identity)
+        }
+        val formatted = java.lang.StringBuilder()
+        val length = original.length
+        for (i in 0 until length) {
+            formatted.append(original[i])
+            val remaining = length - i - 1
+            if (remaining > 0 && remaining % 3 == 0) {
+                formatted.append(separator)
+            }
+        }
+        val offsetMapping = object : androidx.compose.ui.text.input.OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset <= 0) return 0
+                if (offset >= length) return formatted.length
+                val commasBefore = (length - 1) / 3 - (length - offset - 1) / 3
+                return offset + commasBefore
+            }
+            override fun transformedToOriginal(offset: Int): Int {
+                if (offset <= 0) return 0
+                if (offset >= formatted.length) return length
+                var originalOffset = 0
+                var transformedOffset = 0
+                while (transformedOffset < offset && originalOffset < length) {
+                    transformedOffset++
+                    val remaining = length - originalOffset - 1
+                    if (remaining > 0 && remaining % 3 == 0) {
+                        transformedOffset++
+                    }
+                    originalOffset++
+                }
+                return originalOffset
+            }
+        }
+        return androidx.compose.ui.text.input.TransformedText(
+            androidx.compose.ui.text.AnnotatedString(formatted.toString()),
+            offsetMapping
+        )
+    }
+}

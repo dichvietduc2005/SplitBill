@@ -22,7 +22,8 @@ fun AmountText(
   modifier: Modifier = Modifier,
   style: TextStyle = LocalTextStyle.current,
   isDebt: Boolean? = null, // null means neutral (e.g., total bill amount)
-  currency: String = "VND"
+  currency: String = "VND",
+  overrideColor: Color = Color.Unspecified
 ) {
   val animatedAmount by androidx.compose.animation.core.animateFloatAsState(
     targetValue = amount.toFloat(),
@@ -42,13 +43,17 @@ fun AmountText(
     }
   }
   
-  val textColor = when (isDebt) {
+  val themeColor = when (isDebt) {
     true -> LocalSplitBillCustomColors.current.negativeAmount
     false -> LocalSplitBillCustomColors.current.positiveAmount
     null -> style.color // use default color from style
   }
 
-  val finalColor = if (textColor != Color.Unspecified) textColor else style.color
+  val finalColor = when {
+    overrideColor != Color.Unspecified -> overrideColor
+    themeColor != Color.Unspecified -> themeColor
+    else -> style.color
+  }
 
   Text(
     text = formattedAmount,

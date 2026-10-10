@@ -53,6 +53,7 @@ import com.example.splitbill.data.api.GroupResponse
 import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.LocalSplitBillCustomColors
 import com.example.splitbill.theme.Motion
+import com.example.splitbill.ui.components.AmountText
 import com.example.splitbill.ui.components.EmptyState
 import com.example.splitbill.ui.components.GroupListSkeleton
 import com.example.splitbill.ui.components.ScrollAwareFab
@@ -160,43 +161,74 @@ fun GroupListScreen(
                 horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap),
                 modifier = Modifier.fillMaxSize()
               ) {
-                // HERO CARD (Full Width)
+                // HERO CARD - Balance Overview (Full Width)
                 item(span = StaggeredGridItemSpan.FullLine) {
-                  SplitBillCard(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingM)
+                  Column(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingM),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
                   ) {
+                    Text(
+                      "Tổng quan tài chính",
+                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.SpaceBetween,
-                      modifier = Modifier.fillMaxWidth()
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
                     ) {
-                      Column {
-                        Text(
-                          text = "Tổng quan",
-                          style = MaterialTheme.typography.titleMedium,
-                          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
-                        Spacer(Modifier.height(Dimens.SpacingXS))
-                        Text(
-                          text = "${state.groups.size} Nhóm",
-                          style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                          color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                      }
-                      Box(
-                        modifier = Modifier
-                          .size(56.dp)
-                          .background(MaterialTheme.colorScheme.surface, CircleShape),
-                        contentAlignment = Alignment.Center
+                      // Bạn được nhận lại
+                      SplitBillCard(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.weight(1f)
                       ) {
-                        Icon(
-                          Icons.Rounded.Groups,
-                          contentDescription = null,
-                          tint = MaterialTheme.colorScheme.primary,
-                          modifier = Modifier.size(32.dp)
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
+                          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("🟢", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                              "Được nhận lại",
+                              style = MaterialTheme.typography.labelSmall,
+                              color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                          }
+                          AmountText(
+                            amount = state.totalToReceive,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            isDebt = false,
+                            overrideColor = MaterialTheme.colorScheme.onSecondaryContainer
+                          )
+                        }
                       }
+                      // Bạn cần trả
+                      SplitBillCard(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.weight(1f)
+                      ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
+                          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("🔴", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                              "Cần phải trả",
+                              style = MaterialTheme.typography.labelSmall,
+                              color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                            )
+                          }
+                          AmountText(
+                            amount = state.totalToPay,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            isDebt = true,
+                            overrideColor = MaterialTheme.colorScheme.onErrorContainer
+                          )
+                        }
+                      }
+                    }
+                    // Group count chip
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
+                      Icon(Icons.Rounded.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                      Text(
+                        "${state.groups.size} nhóm đang tham gia",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                      )
                     }
                   }
                 }

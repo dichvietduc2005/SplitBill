@@ -59,6 +59,7 @@ import com.example.splitbill.ui.stats.GroupStatsUiState
 fun GroupDetailScreen(
   viewModel: GroupDetailViewModel,
   refreshSignal: Int,
+  initialBillId: String? = null,
   onNavigateBack: () -> Unit,
   onAddBill: (groupId: String, members: List<MemberResponse>) -> Unit,
   onViewDebts: (groupId: String) -> Unit,
@@ -68,6 +69,7 @@ fun GroupDetailScreen(
   onEditBill: (groupId: String, bill: BillResponse, members: List<MemberResponse>) -> Unit
 ) {
   val state by viewModel.state.collectAsStateWithLifecycle()
+  val context = LocalContext.current
   var showAddMemberDialog by remember { mutableStateOf(false) }
   var showInviteSheet by remember { mutableStateOf(false) }
   var showMembersSheet by remember { mutableStateOf(false) }
@@ -77,6 +79,21 @@ fun GroupDetailScreen(
   LaunchedEffect(refreshSignal) {
     if (refreshSignal > 0) {
       viewModel.refreshBills()
+    }
+  }
+
+  val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+  var hasScrolledToInitialBill by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+  LaunchedEffect(state.bills, initialBillId) {
+    if (!hasScrolledToInitialBill && !initialBillId.isNullOrBlank() && state.bills.isNotEmpty()) {
+      val billIndex = state.bills.indexOfFirst { it.id == initialBillId }
+      if (billIndex != -1) {
+        hasScrolledToInitialBill = true
+        // 3 items (Hero, ActionGrid, Members title) + state.members.size + 1 (Bills header)
+        val targetIndex = 4 + state.members.size + billIndex
+        kotlinx.coroutines.delay(300)
+        listState.animateScrollToItem((targetIndex - 1).coerceAtLeast(0))
+      }
     }
   }
 
@@ -102,6 +119,27 @@ fun GroupDetailScreen(
         canNavigateBack = true,
         onNavigateBack = onNavigateBack,
         actions = {
+          IconButton(onClick = {
+            val group = state.group
+            if (group != null) {
+              val joinLink = "https://splitbill.app/join/${group.id}"
+              val shareText = "🎉 Tham gia nhóm chia tiền \"${group.name}\" trên SplitBill nhé!\n" +
+                "👉 $joinLink\n" +
+                "(Hoặc nhập mã nhóm: ${group.id})"
+              val sendIntent = android.content.Intent().apply {
+                action = android.content.Intent.ACTION_SEND
+                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                type = "text/plain"
+              }
+              context.startActivity(android.content.Intent.createChooser(sendIntent, "Chia sẻ nhóm"))
+            }
+          }) {
+            Icon(
+              imageVector = Icons.Rounded.Share,
+              contentDescription = "Chia sẻ nhóm",
+              tint = MaterialTheme.colorScheme.primary
+            )
+          }
           IconButton(onClick = { onViewActivities(state.group?.id ?: "") }) {
             Icon(
               imageVector = Icons.Rounded.History,
@@ -192,6 +230,7 @@ fun GroupDetailScreen(
         modifier = Modifier.padding(paddingValues).fillMaxSize()
       ) {
         LazyColumn(
+          state = listState,
           modifier = Modifier.fillMaxSize(),
           contentPadding = PaddingValues(Dimens.SpacingM),
           verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
@@ -393,8 +432,10 @@ fun GroupDetailScreen(
               visible = visible,
               enter = Motion.staggeredSlideIn(index)
             ) {
+              val isTargetBill = bill.id == initialBillId
               BillCard(
                 bill = bill, 
+                isHighlighted = isTargetBill,
                 onDelete = { viewModel.deleteBill(bill.id) },
                 onEdit = { onEditBill(state.group?.id ?: "", bill, state.members) },
                 onTogglePaid = { viewModel.toggleBillPaidStatus(bill.id, bill.isPaid) }
@@ -583,90 +624,130 @@ fun GroupDetailScreen(
     }
   }
 
-  // --- Group Info PremiumDialog ---
+  // --- Group Info ModalBottomSheet ---
   if (showGroupInfoDialog && state.group != null) {
     val clipboardManager = LocalClipboardManager.current
-    PremiumDialog(
+    val group = state.group!!
+    ModalBottomSheet(
       onDismissRequest = { showGroupInfoDialog = false },
-      title = "Thông tin nhóm",
-      icon = Icons.Rounded.Info,
-      confirmButtonText = "Đóng",
-      onConfirm = { showGroupInfoDialog = false },
-      content = {
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.fillMaxWidth()
+      containerColor = MaterialTheme.colorScheme.surface,
+      shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+      Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = Dimens.SpacingL)
+          .padding(bottom = Dimens.SpacingXL)
+      ) {
+        Text(
+          text = group.name,
+          style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.primary,
+          textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        Box(
+          modifier = Modifier
+            .size(150.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White)
+            .padding(8.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp)),
+          contentAlignment = Alignment.Center
+        ) {
+          AsyncImage(
+            model = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=splitbill://join/${group.id}",
+            contentDescription = "QR Code của nhóm",
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { 
+              clipboardManager.setText(AnnotatedString(group.id))
+              android.widget.Toast.makeText(context, "Đã sao chép ID nhóm", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .padding(horizontal = Dimens.SpacingM, vertical = Dimens.SpacingS)
         ) {
           Text(
-            text = state.group!!.name,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.primary
+            text = "Mã ID: ${group.id.take(8)}... (Chạm để copy)",
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
           )
-          Spacer(Modifier.height(Dimens.SpacingL))
-          
-          Box(
-            modifier = Modifier
-              .size(160.dp)
-              .clip(RoundedCornerShape(16.dp))
-              .background(Color.White)
-              .padding(8.dp),
-            contentAlignment = Alignment.Center
-          ) {
-            AsyncImage(
-              model = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${state.group!!.id}",
-              contentDescription = "QR Code của nhóm",
-              modifier = Modifier.fillMaxSize()
-            )
-          }
-          
-          Spacer(Modifier.height(Dimens.SpacingL))
-          
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-              .clip(RoundedCornerShape(8.dp))
-              .background(MaterialTheme.colorScheme.surfaceVariant)
-              .clickable { 
-                clipboardManager.setText(AnnotatedString(state.group!!.id))
-              }
-              .padding(horizontal = Dimens.SpacingM, vertical = Dimens.SpacingS)
-          ) {
-            Text(
-              text = "Mã ID: ${state.group!!.id}",
-              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.width(Dimens.SpacingS))
-            Icon(
-              Icons.Rounded.ContentCopy, 
-              contentDescription = "Copy",
-              modifier = Modifier.size(16.dp),
-              tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
-          
-          Spacer(Modifier.height(Dimens.SpacingL))
-          HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-          Spacer(Modifier.height(Dimens.SpacingM))
-          
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            Text("Người tạo:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(state.group!!.createdByName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-          }
-          Spacer(Modifier.height(Dimens.SpacingXS))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            Text("Ngày tạo:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(state.group!!.createdAt.take(10), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-          }
+          Spacer(Modifier.width(Dimens.SpacingS))
+          Icon(
+            Icons.Rounded.ContentCopy, 
+            contentDescription = "Copy",
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary
+          )
+        }
+
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        // Nút Chia sẻ qua Zalo / Messenger
+        com.example.splitbill.ui.components.GradientButton(
+          onClick = {
+            val joinLink2 = "https://splitbill.app/join/${group.id}"
+            val shareText = "🎉 Tham gia nhóm chia tiền \"${group.name}\" trên SplitBill nhé!\n" +
+              "👉 $joinLink2\n" +
+              "(Hoặc nhập mã nhóm: ${group.id})"
+            val sendIntent = android.content.Intent().apply {
+              action = android.content.Intent.ACTION_SEND
+              putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+              type = "text/plain"
+            }
+            context.startActivity(android.content.Intent.createChooser(sendIntent, "Chia sẻ nhóm"))
+          },
+          modifier = Modifier.fillMaxWidth().height(50.dp),
+          shape = RoundedCornerShape(14.dp)
+        ) {
+          Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White)
+          Spacer(Modifier.width(Dimens.SpacingS))
+          Text(
+            "Chia sẻ qua Zalo / Messenger",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = Color.White
+          )
+        }
+
+        Spacer(Modifier.height(Dimens.SpacingM))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(Dimens.SpacingM))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text("Người tạo:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(group.createdByName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+        }
+        Spacer(Modifier.height(Dimens.SpacingXS))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text("Số thành viên:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text("${state.members.size} người", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+        }
+        Spacer(Modifier.height(Dimens.SpacingXS))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text("Ngày tạo:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(group.createdAt.take(10), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
         }
       }
-    )
+    }
   }
 
 
@@ -939,11 +1020,12 @@ private fun MemberBalanceCard(member: MemberResponse, balance: Double) {
 @Composable
 private fun BillCard(
   bill: BillResponse, 
+  isHighlighted: Boolean = false,
   onDelete: () -> Unit, 
   onEdit: () -> Unit,
   onTogglePaid: () -> Unit
 ) {
-  var expanded by remember { mutableStateOf(false) }
+  var expanded by remember(bill.id) { mutableStateOf(isHighlighted) }
   var showDeleteDialog by remember { mutableStateOf(false) }
   val customColors = com.example.splitbill.theme.LocalSplitBillCustomColors.current
 
@@ -991,6 +1073,7 @@ private fun BillCard(
   ) {
     SplitBillCard(
       onClick = { expanded = !expanded },
+      border = if (isHighlighted) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
       modifier = Modifier.fillMaxWidth().animateContentSize(
         animationSpec = Motion.springGentle()
       )
