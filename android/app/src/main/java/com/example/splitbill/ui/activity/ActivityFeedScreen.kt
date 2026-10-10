@@ -504,10 +504,15 @@ private fun ActivityItemRow(activity: ActivityResponse) {
 
   // Extract detail from description — show what bill/payment it was about
   val detailText = remember(activity.description) {
-    // Remove the username prefix to get the action part
-    val withoutUser = activity.description.removePrefix(activity.username).trimStart()
-    // Clean it up — remove leading "đã " if present after username removal
+    val withoutUser = activity.description.removePrefix(activity.username).trimStart().replace(Regex("""\|CAT:[A-Z_]+"""), "")
     withoutUser.ifBlank { config.actionLabel }
+  }
+
+  val categoryKey = remember(activity.description) {
+    Regex("""\|CAT:([A-Z_]+)""").find(activity.description)?.groupValues?.get(1)
+  }
+  val categoryConfig = remember(categoryKey) {
+    categoryKey?.let { com.example.splitbill.data.model.BillCategory.fromKey(it) }
   }
 
   Card(
@@ -530,13 +535,13 @@ private fun ActivityItemRow(activity: ActivityResponse) {
         modifier = Modifier
           .size(44.dp)
           .clip(CircleShape)
-          .background(config.bgColor),
+          .background(categoryConfig?.bgColor ?: config.bgColor),
         contentAlignment = Alignment.Center
       ) {
         Icon(
-          imageVector = config.icon,
+          imageVector = categoryConfig?.icon ?: config.icon,
           contentDescription = null,
-          tint = config.tintColor,
+          tint = categoryConfig?.iconColor ?: config.tintColor,
           modifier = Modifier.size(22.dp)
         )
       }

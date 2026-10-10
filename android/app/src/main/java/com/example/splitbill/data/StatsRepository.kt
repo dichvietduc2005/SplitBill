@@ -13,8 +13,10 @@ class StatsRepository(private val tokenManager: TokenManager) {
 
   suspend fun getUserStats(): Result<UserStatsResponse> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val userId = auth.currentUserOrNull()?.id
-        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
+        ?: TokenManager.getUserIdFromToken(cachedToken)
         ?: return Result.failure(Exception("Chưa đăng nhập"))
 
       val memberRecords = postgrest["group_members"]

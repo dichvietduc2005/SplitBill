@@ -25,11 +25,16 @@ import android.os.Build
 import androidx.lifecycle.lifecycleScope
 import com.example.splitbill.data.FcmTokenManager
 import com.example.splitbill.data.TokenManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class MainActivity : FragmentActivity() {
+  private val navIntentState = kotlinx.coroutines.flow.MutableStateFlow<android.content.Intent?>(null)
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    navIntentState.value = intent
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -81,11 +86,17 @@ class MainActivity : FragmentActivity() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
           ) {
-            MainNavigation(settingsManager)
+            MainNavigation(settingsManager, navIntentFlow = navIntentState)
           }
         }
       }
     }
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    navIntentState.value = intent
   }
 }
 

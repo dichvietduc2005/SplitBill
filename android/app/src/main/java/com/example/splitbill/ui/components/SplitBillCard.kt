@@ -28,6 +28,7 @@ fun SplitBillCard(
   contentColor: Color = Color.Unspecified,
   elevation: androidx.compose.ui.unit.Dp = 16.dp, // Default larger elevation
   shape: androidx.compose.ui.graphics.Shape = SplitBillShapes.large,
+  border: androidx.compose.foundation.BorderStroke? = null,
   content: @Composable ColumnScope.() -> Unit
 ) {
   val haptic = LocalHapticFeedback.current
@@ -66,7 +67,7 @@ fun SplitBillCard(
   Card(
     modifier = finalModifier,
     shape = shape,
-    border = androidx.compose.foundation.BorderStroke(
+    border = border ?: androidx.compose.foundation.BorderStroke(
       width = 1.dp,
       color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f) // Faint, modern border to define edges without being harsh
     ),

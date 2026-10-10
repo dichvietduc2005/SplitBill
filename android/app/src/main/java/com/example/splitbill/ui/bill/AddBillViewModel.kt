@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 sealed interface AddBillUiState {
   object Idle : AddBillUiState
   object Loading : AddBillUiState
-  object Success : AddBillUiState
+  data class Success(val billId: String? = null, val groupId: String? = null) : AddBillUiState
   data class Error(val message: String) : AddBillUiState
 }
 
@@ -60,12 +60,12 @@ class AddBillViewModel(
         if (bill != null && receiptBytes != null) {
           val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
           _uiState.value = if (uploadResult.isSuccess) {
-            AddBillUiState.Success
+            AddBillUiState.Success(billId = bill.id, groupId = groupId)
           } else {
             AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
           }
         } else {
-          _uiState.value = AddBillUiState.Success
+          _uiState.value = AddBillUiState.Success(billId = bill?.id, groupId = groupId)
         }
       } else {
         _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tạo hóa đơn")
@@ -110,12 +110,12 @@ class AddBillViewModel(
         if (bill != null && receiptBytes != null) {
           val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
           _uiState.value = if (uploadResult.isSuccess) {
-            AddBillUiState.Success
+            AddBillUiState.Success(billId = bill.id, groupId = null)
           } else {
             AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
           }
         } else {
-          _uiState.value = AddBillUiState.Success
+          _uiState.value = AddBillUiState.Success(billId = bill?.id ?: billId, groupId = null)
         }
       } else {
         _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi cập nhật hóa đơn")

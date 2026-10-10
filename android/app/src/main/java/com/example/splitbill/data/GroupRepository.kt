@@ -8,35 +8,69 @@ import com.example.splitbill.data.supabase.*
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 
-class GroupRepository(private val tokenManager: TokenManager) {
+class GroupRepository(
+  private val tokenManager: TokenManager,
+  private val groupDao: com.example.splitbill.data.local.dao.GroupDao? = null
+) {
 
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val auth get() = SupabaseConfig.client.auth
 
   suspend fun getGroups(): Result<List<GroupResponse>> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val currentUserId = auth.currentUserOrNull()?.id 
-        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
+        ?: TokenManager.getUserIdFromToken(cachedToken)
       if (currentUserId == null) {
         return Result.failure(Exception("Chưa đăng nhập"))
       }
 
-      val memberRecords = postgrest["group_members"]
-        .select { filter { eq("user_id", currentUserId) } }
-        .decodeList<GroupMemberEntity>()
+      // 1. Lấy nhóm từ bảng group_members mà user tham gia
+      val memberRecords = try {
+        postgrest["group_members"]
+          .select { filter { eq("user_id", currentUserId) } }
+          .decodeList<GroupMemberEntity>()
+      } catch (e: Exception) {
+        android.util.Log.w("GroupRepository", "Query group_members failed: ${e.message}")
+        emptyList()
+      }
+      val memberGroupIds = memberRecords.map { it.groupId }
 
-      if (memberRecords.isEmpty()) {
+      // 2. Lấy trực tiếp tất cả nhóm mà user có quyền xem từ Supabase (RLS cho phép: is_group_member OR created_by = auth.uid())
+      val directGroups = try {
+        postgrest["groups"].select().decodeList<GroupEntity>()
+      } catch (e: Exception) {
+        android.util.Log.w("GroupRepository", "Query direct groups failed: ${e.message}")
+        emptyList()
+      }
+
+      // 3. Lấy thêm theo groupIds từ memberRecords nếu directGroups chưa bao gồm
+      val groupsFromMemberIds = if (memberGroupIds.isNotEmpty()) {
+        try {
+          postgrest["groups"]
+            .select { filter { isIn("id", memberGroupIds) } }
+            .decodeList<GroupEntity>()
+        } catch (_: Exception) {
+          emptyList()
+        }
+      } else emptyList()
+
+      // Hợp nhất danh sách nhóm
+      val groups = (directGroups + groupsFromMemberIds).distinctBy { it.id }
+
+      if (groups.isEmpty()) {
         return Result.success(emptyList())
       }
 
-      val groupIds = memberRecords.map { it.groupId }
-      val groups = postgrest["groups"]
-        .select { filter { isIn("id", groupIds) } }
-        .decodeList<GroupEntity>()
-
-      val allMembers = postgrest["group_members"]
-        .select { filter { isIn("group_id", groupIds) } }
-        .decodeList<GroupMemberEntity>()
+      val groupIds = groups.map { it.id }
+      val allMembers = try {
+        postgrest["group_members"]
+          .select { filter { isIn("group_id", groupIds) } }
+          .decodeList<GroupMemberEntity>()
+      } catch (_: Exception) {
+        emptyList()
+      }
       val memberCountMap = allMembers.groupBy { it.groupId }.mapValues { it.value.size }
 
       val result = groups.map { g ->
@@ -49,14 +83,52 @@ class GroupRepository(private val tokenManager: TokenManager) {
           createdAt = g.createdAt ?: ""
         )
       }
+
+      // Lưu cache vào Room
+      groupDao?.let { dao ->
+        val localEntities = groups.map { g ->
+          com.example.splitbill.data.local.entity.GroupEntityLocal(
+            id = g.id,
+            name = g.name,
+            description = g.description,
+            createdBy = g.createdBy ?: "",
+            createdByName = "",
+            memberCount = memberCountMap[g.id] ?: 1,
+            createdAt = g.createdAt
+          )
+        }
+        dao.insertGroups(localEntities)
+      }
+
       Result.success(result)
     } catch (e: Exception) {
+      // Fallback offline từ Room cache
+      if (groupDao != null) {
+        try {
+          val localGroups = groupDao.getGroups()
+          if (localGroups.isNotEmpty()) {
+            val cachedResult = localGroups.map { g ->
+              GroupResponse(
+                id = g.id,
+                name = g.name,
+                createdBy = g.createdBy,
+                createdByName = g.createdByName,
+                memberCount = g.memberCount,
+                createdAt = g.createdAt ?: ""
+              )
+            }
+            return Result.success(cachedResult)
+          }
+        } catch (_: Exception) {}
+      }
       Result.failure(e)
     }
   }
 
+
   suspend fun getGroupDetails(groupId: String): Result<GroupResponse> {
     return try {
+      SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
       val group = postgrest["groups"]
         .select { filter { eq("id", groupId) } }
         .decodeSingle<GroupEntity>()

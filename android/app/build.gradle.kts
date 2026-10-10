@@ -6,6 +6,8 @@ plugins {
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.services)
+  kotlin("kapt")
+  alias(libs.plugins.hilt.android)
 }
 
 val localProperties = Properties()
@@ -80,14 +82,7 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.ui.text.google.fonts)
   implementation(libs.androidx.datastore.preferences)
-
-  // Ktor Client
-  implementation(libs.ktor.client.core)
-  implementation(libs.ktor.client.okhttp)
-  implementation(libs.ktor.client.content.negotiation)
-  implementation(libs.ktor.serialization.kotlinx.json)
-  implementation(libs.ktor.client.auth)
-  implementation(libs.ktor.client.logging)
+  implementation(libs.androidx.security.crypto)
 
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
@@ -124,7 +119,8 @@ dependencies {
   implementation(platform(libs.firebase.bom))
   implementation(libs.firebase.messaging)
 
-  // Supabase SDK
+  // Supabase SDK (Ktor OkHttp engine required internally by Supabase SDK)
+  implementation(libs.ktor.client.okhttp)
   implementation(platform(libs.supabase.bom))
   implementation(libs.supabase.postgrest)
   implementation(libs.supabase.auth)
@@ -135,4 +131,18 @@ dependencies {
   implementation("androidx.glance:glance-appwidget:1.1.1")
   implementation("androidx.glance:glance-material3:1.1.1")
   implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+  // Hilt Dependency Injection
+  implementation(libs.hilt.android)
+  kapt(libs.hilt.compiler)
+
+  // Room Database (Offline-first)
+  implementation(libs.room.runtime)
+  implementation(libs.room.ktx)
+  kapt(libs.room.compiler)
 }
+
+kapt {
+  correctErrorTypes = true
+}
+

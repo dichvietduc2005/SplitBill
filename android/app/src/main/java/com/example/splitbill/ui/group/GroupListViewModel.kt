@@ -12,13 +12,19 @@ import kotlinx.coroutines.launch
 
 sealed interface GroupListUiState {
   object Loading : GroupListUiState
-  data class Success(val groups: List<GroupResponse>, val actionMessage: String? = null) : GroupListUiState
+  data class Success(
+    val groups: List<GroupResponse>,
+    val actionMessage: String? = null,
+    val totalToReceive: Double = 0.0,
+    val totalToPay: Double = 0.0
+  ) : GroupListUiState
   data class Error(val message: String) : GroupListUiState
 }
 
 class GroupListViewModel(
   private val groupRepository: GroupRepository,
-  private val inviteRepository: InviteRepository
+  private val inviteRepository: InviteRepository,
+  private val statsRepository: com.example.splitbill.data.StatsRepository? = null
 ) : ViewModel() {
 
   companion object {
@@ -46,9 +52,24 @@ class GroupListViewModel(
       try {
         val result = groupRepository.getGroups()
         if (result.isSuccess) {
-          val newState = GroupListUiState.Success(result.getOrDefault(emptyList()))
-          _uiState.value = newState
-          cachedState = newState
+          val groups = result.getOrDefault(emptyList())
+          val initialSuccess = GroupListUiState.Success(groups = groups)
+          _uiState.value = initialSuccess
+          cachedState = initialSuccess
+
+          // Tải số dư thống kê nền để cập nhật Hero card
+          viewModelScope.launch {
+            val stats = statsRepository?.getUserStats()?.getOrNull()
+            if (stats != null) {
+              val updatedState = GroupListUiState.Success(
+                groups = groups,
+                totalToReceive = stats.totalOthersOweToMe,
+                totalToPay = stats.totalOwedToOthers
+              )
+              _uiState.value = updatedState
+              cachedState = updatedState
+            }
+          }
         } else {
           _uiState.value = GroupListUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải nhóm")
         }

@@ -2,10 +2,10 @@ package com.example.splitbill.widget
 
 import android.content.Context
 import androidx.glance.appwidget.updateAll
-import androidx.work.CoroutineWorker
-import androidx.work.WorkerParameters
+import androidx.work.*
 import com.example.splitbill.data.StatsRepository
 import com.example.splitbill.data.TokenManager
+import java.util.concurrent.TimeUnit
 
 class WidgetDataWorker(
   private val appContext: Context,
@@ -31,6 +31,39 @@ class WidgetDataWorker(
       Result.success()
     } catch (e: Exception) {
       Result.retry()
+    }
+  }
+
+  companion object {
+    private const val WORK_NAME = "splitbill_widget_periodic_sync"
+
+    fun enqueuePeriodicWork(context: Context) {
+      val constraints = Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+
+      val periodicWork = PeriodicWorkRequestBuilder<WidgetDataWorker>(
+        15, TimeUnit.MINUTES
+      )
+        .setConstraints(constraints)
+        .build()
+
+      WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        WORK_NAME,
+        ExistingPeriodicWorkPolicy.KEEP,
+        periodicWork
+      )
+    }
+
+    fun triggerOneTimeUpdate(context: Context) {
+      val work = OneTimeWorkRequestBuilder<WidgetDataWorker>()
+        .setConstraints(
+          Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        )
+        .build()
+      WorkManager.getInstance(context).enqueue(work)
     }
   }
 }

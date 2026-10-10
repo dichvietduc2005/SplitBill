@@ -12,7 +12,11 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
 import java.util.UUID
 
-class BillRepository(private val tokenManager: TokenManager) {
+class BillRepository(
+  private val tokenManager: TokenManager,
+  private val billDao: com.example.splitbill.data.local.dao.BillDao? = null,
+  private val pendingSyncDao: com.example.splitbill.data.local.dao.PendingSyncDao? = null
+) {
 
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val storage get() = SupabaseConfig.client.storage
@@ -66,8 +70,72 @@ class BillRepository(private val tokenManager: TokenManager) {
           createdAt = b.createdAt ?: ""
         )
       }
+
+      // Lưu cache vào Room
+      billDao?.let { dao ->
+        val localBills = bills.map { b ->
+          com.example.splitbill.data.local.entity.BillEntityLocal(
+            id = b.id ?: "",
+            groupId = b.groupId,
+            paidBy = b.paidByUserId,
+            title = b.description,
+            description = b.description,
+            totalAmount = b.totalAmount,
+            billDate = b.createdAt,
+            category = b.category,
+            receiptImageUrl = b.receiptUrl,
+            splitType = "EQUAL",
+            createdAt = b.createdAt,
+            isPendingSync = false
+          )
+        }
+        val localSplits = splits.map { s ->
+          com.example.splitbill.data.local.entity.BillSplitEntityLocal(
+            billId = s.billId,
+            userId = s.userId,
+            amountOwed = s.amountOwed
+          )
+        }
+        dao.syncBillsWithSplits(groupId, localBills, localSplits)
+      }
+
       Result.success(response)
     } catch (e: Exception) {
+      // Fallback offline từ Room cache
+      if (billDao != null) {
+        try {
+          val cachedBills = billDao.getBillsForGroup(groupId)
+          if (cachedBills.isNotEmpty()) {
+            val billIds = cachedBills.map { it.id }
+            val cachedSplits = billDao.getSplitsForBills(billIds).groupBy { it.billId }
+            val cachedResponse = cachedBills.map { b ->
+              val splits = cachedSplits[b.id]?.map { s ->
+                BillSplitResponse(
+                  userId = s.userId,
+                  username = "Thành viên",
+                  amountOwed = s.amountOwed
+                )
+              } ?: emptyList()
+              BillResponse(
+                id = b.id,
+                groupId = b.groupId,
+                description = b.title,
+                totalAmount = b.totalAmount,
+                paidByUserId = b.paidBy,
+                paidByUsername = "Thành viên",
+                currency = "VND",
+                exchangeRate = 1.0,
+                category = b.category ?: "OTHER",
+                receiptUrl = b.receiptImageUrl,
+                isPaid = false,
+                splits = splits,
+                createdAt = b.createdAt ?: ""
+              )
+            }
+            return Result.success(cachedResponse)
+          }
+        } catch (_: Exception) {}
+      }
       Result.failure(e)
     }
   }
@@ -132,7 +200,7 @@ class BillRepository(private val tokenManager: TokenManager) {
             groupId = groupId,
             userId = currentUserId,
             activityType = "BILL_CREATED",
-            description = "$actorName đã thêm hóa đơn '$description'"
+            description = "$actorName đã thêm hóa đơn '$description'|CAT:$category"
           )
         )
       } catch (_: Exception) {}
