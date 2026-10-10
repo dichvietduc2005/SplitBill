@@ -63,7 +63,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object Onboarding : NavKey
 @Serializable data object Login : NavKey
 @Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Groups) : NavKey
-@Serializable data class GroupDetail(val groupId: String) : NavKey
+@Serializable data class GroupDetail(val groupId: String, val initialBillId: String? = null) : NavKey
 @Serializable data class AddBill(
   val groupId: String, 
   val memberIds: List<String>, 
@@ -78,7 +78,10 @@ import kotlinx.serialization.Serializable
 @Serializable data object Settings : NavKey
 
 @Composable
-fun MainNavigation(settingsManager: SettingsManager) {
+fun MainNavigation(
+  settingsManager: SettingsManager,
+  navIntentFlow: kotlinx.coroutines.flow.StateFlow<android.content.Intent?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+) {
   val backStack = rememberNavBackStack(Login)
   val context = LocalContext.current
   val tokenManager = TokenManager(context)
@@ -88,6 +91,37 @@ fun MainNavigation(settingsManager: SettingsManager) {
     if (!onboardingCompleted && backStack.lastOrNull() == Login) {
       backStack.clear()
       backStack.add(Onboarding)
+    }
+  }
+
+  // Handle push notification clicks and deep links
+  val navIntent by navIntentFlow.collectAsState()
+  LaunchedEffect(navIntent) {
+    val currentIntent = navIntent ?: return@LaunchedEffect
+    val groupId = currentIntent.getStringExtra("groupId")
+    val billId = currentIntent.getStringExtra("billId")
+
+    var targetGroupId = groupId
+    val dataUri = currentIntent.data
+    if (targetGroupId.isNullOrBlank() && dataUri != null) {
+      val uriStr = dataUri.toString()
+      if (uriStr.contains("join/")) {
+        targetGroupId = uriStr.substringAfter("join/").substringBefore("/").substringBefore("?")
+      }
+    }
+
+    if (!targetGroupId.isNullOrBlank()) {
+      val token = tokenManager.getCachedToken()
+      if (!token.isNullOrBlank()) {
+        val current = backStack.lastOrNull()
+        if (current !is GroupDetail || current.groupId != targetGroupId || current.initialBillId != billId) {
+          if (backStack.none { it is HomeTabs }) {
+            backStack.clear()
+            backStack.add(HomeTabs(HomeTab.Groups))
+          }
+          backStack.add(GroupDetail(groupId = targetGroupId, initialBillId = billId))
+        }
+      }
     }
   }
 
@@ -227,6 +261,7 @@ fun MainNavigation(settingsManager: SettingsManager) {
         }
         GroupDetailScreen(
           viewModel = viewModel,
+          initialBillId = key.initialBillId,
           refreshSignal = refreshSignal.intValue,
           onNavigateBack = { backStack.removeLastOrNull() },
           onAddBill = { groupId, members ->
@@ -398,9 +433,11 @@ fun HomeTabsScreen(
     ) { tab ->
       when (tab) {
         HomeTab.Groups -> {
-          val groupRepository = GroupRepository(tokenManager)
+          val database = com.example.splitbill.data.local.AppDatabase.getDatabase(LocalContext.current)
+          val groupRepository = GroupRepository(tokenManager, database.groupDao())
           val inviteRepository = InviteRepository(tokenManager)
-          val viewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository) }
+          val statsRepository = StatsRepository(tokenManager)
+          val viewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
           GroupListScreen(
             viewModel = viewModel,
             onNavigateToGroup = onNavigateToGroup,

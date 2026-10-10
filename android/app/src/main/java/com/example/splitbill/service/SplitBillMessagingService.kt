@@ -21,12 +21,13 @@ class SplitBillMessagingService : FirebaseMessagingService() {
     super.onMessageReceived(remoteMessage)
 
     val groupId = remoteMessage.data["groupId"]
+    val billId = remoteMessage.data["billId"]
     val type = remoteMessage.data["type"]
 
     // Show system notification
     val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "SplitBill"
     val body = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: ""
-    showNotification(title, body, groupId)
+    showNotification(title, body, groupId, billId)
 
     // Emit event for UI refresh
     CoroutineScope(Dispatchers.Main).launch {
@@ -44,7 +45,7 @@ class SplitBillMessagingService : FirebaseMessagingService() {
     }
   }
 
-  private fun showNotification(title: String, body: String, groupId: String?) {
+  private fun showNotification(title: String, body: String, groupId: String?, billId: String?) {
     val channelId = "splitbill_notifications"
     val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
@@ -60,8 +61,9 @@ class SplitBillMessagingService : FirebaseMessagingService() {
     }
 
     val intent = Intent(this, MainActivity::class.java).apply {
-      putExtra("groupId", groupId)
-      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      if (!groupId.isNullOrBlank()) putExtra("groupId", groupId)
+      if (!billId.isNullOrBlank()) putExtra("billId", billId)
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
     }
     
     val pendingIntent = PendingIntent.getActivity(
