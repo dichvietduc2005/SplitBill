@@ -8,6 +8,8 @@ data class BillSplitEntityLocal(
   @PrimaryKey(autoGenerate = true) val localId: Long = 0,
   val billId: String,
   val userId: String,
+  val username: String = "Thành viên",
   val amountOwed: Double,
-  val percentage: Double? = null
+  val percentage: Double? = null,
+  val isSettled: Boolean = false
 )

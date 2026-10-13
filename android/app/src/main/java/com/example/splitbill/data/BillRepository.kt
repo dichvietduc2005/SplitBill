@@ -10,6 +10,7 @@ import com.example.splitbill.utils.DebtSimplifier
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 class BillRepository(
@@ -21,6 +22,41 @@ class BillRepository(
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val storage get() = SupabaseConfig.client.storage
   private val auth get() = SupabaseConfig.client.auth
+
+  /**
+   * Quan sát hóa đơn theo mô hình SSOT (Single Source of Truth) từ Room Flow.
+   */
+  fun observeBillsForGroup(groupId: String): kotlinx.coroutines.flow.Flow<List<BillResponse>>? {
+    val dao = billDao ?: return null
+    return dao.observeBillsForGroup(groupId).map { localList ->
+      val billIds = localList.map { it.id }
+      val cachedSplits = dao.getSplitsForBills(billIds).groupBy { it.billId }
+      localList.map { b ->
+        val splits = cachedSplits[b.id]?.map { s ->
+          BillSplitResponse(
+            userId = s.userId,
+            username = s.username,
+            amountOwed = s.amountOwed
+          )
+        } ?: emptyList()
+        BillResponse(
+          id = b.id,
+          groupId = b.groupId,
+          description = b.title,
+          totalAmount = b.totalAmount,
+          paidByUserId = b.paidBy,
+          paidByUsername = b.paidByUsername,
+          currency = b.currency,
+          exchangeRate = b.exchangeRate,
+          category = b.category ?: "OTHER",
+          receiptUrl = b.receiptImageUrl,
+          isPaid = b.isPaid,
+          splits = splits,
+          createdAt = b.createdAt ?: ""
+        )
+      }
+    }
+  }
 
   suspend fun getBillsForGroup(groupId: String): Result<List<BillResponse>> {
     return try {
@@ -71,19 +107,22 @@ class BillRepository(
         )
       }
 
-      // Lưu cache vào Room
+      // Lưu cache vào Room chính xác, không dùng giá trị hardcode
       billDao?.let { dao ->
         val localBills = bills.map { b ->
           com.example.splitbill.data.local.entity.BillEntityLocal(
             id = b.id ?: "",
             groupId = b.groupId,
             paidBy = b.paidByUserId,
+            paidByUsername = profileMap[b.paidByUserId]?.username ?: "Thành viên",
             title = b.description,
             description = b.description,
             totalAmount = b.totalAmount,
-            billDate = b.createdAt,
+            currency = b.currency,
+            exchangeRate = b.exchangeRate,
             category = b.category,
             receiptImageUrl = b.receiptUrl,
+            isPaid = b.isPaid,
             splitType = "EQUAL",
             createdAt = b.createdAt,
             isPendingSync = false
@@ -93,7 +132,9 @@ class BillRepository(
           com.example.splitbill.data.local.entity.BillSplitEntityLocal(
             billId = s.billId,
             userId = s.userId,
-            amountOwed = s.amountOwed
+            username = profileMap[s.userId]?.username ?: "Thành viên",
+            amountOwed = s.amountOwed,
+            isSettled = s.isSettled
           )
         }
         dao.syncBillsWithSplits(groupId, localBills, localSplits)
@@ -101,7 +142,7 @@ class BillRepository(
 
       Result.success(response)
     } catch (e: Exception) {
-      // Fallback offline từ Room cache
+      // Fallback offline từ Room cache với đầy đủ thông tin chuẩn xác
       if (billDao != null) {
         try {
           val cachedBills = billDao.getBillsForGroup(groupId)
@@ -112,7 +153,7 @@ class BillRepository(
               val splits = cachedSplits[b.id]?.map { s ->
                 BillSplitResponse(
                   userId = s.userId,
-                  username = "Thành viên",
+                  username = s.username,
                   amountOwed = s.amountOwed
                 )
               } ?: emptyList()
@@ -122,12 +163,12 @@ class BillRepository(
                 description = b.title,
                 totalAmount = b.totalAmount,
                 paidByUserId = b.paidBy,
-                paidByUsername = "Thành viên",
-                currency = "VND",
-                exchangeRate = 1.0,
+                paidByUsername = b.paidByUsername,
+                currency = b.currency,
+                exchangeRate = b.exchangeRate,
                 category = b.category ?: "OTHER",
                 receiptUrl = b.receiptImageUrl,
-                isPaid = false,
+                isPaid = b.isPaid,
                 splits = splits,
                 createdAt = b.createdAt ?: ""
               )
@@ -148,12 +189,13 @@ class BillRepository(
     currency: String,
     exchangeRate: Double,
     splits: List<BillSplitItem>,
-    category: String = "GENERAL"
+    category: String = "GENERAL",
+    clientBillId: String? = null
   ): Result<BillResponse> {
     return try {
-      val billId = UUID.randomUUID().toString()
+      val billId = clientBillId ?: UUID.randomUUID().toString()
 
-      postgrest["bills"].insert(
+      postgrest["bills"].upsert(
         BillEntity(
           id = billId,
           groupId = groupId,
@@ -175,6 +217,9 @@ class BillRepository(
       }
 
       if (splitEntities.isNotEmpty()) {
+        try {
+          postgrest["bill_splits"].delete { filter { eq("bill_id", billId) } }
+        } catch (_: Exception) {}
         postgrest["bill_splits"].insert(splitEntities)
       }
 

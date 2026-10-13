@@ -66,7 +66,8 @@ class SyncBillsWorker(
               currency = currency,
               exchangeRate = exchangeRate,
               splits = splits,
-              category = category
+              category = category,
+              clientBillId = action.idempotencyKey
             )
 
             if (result.isSuccess) {
@@ -74,15 +75,24 @@ class SyncBillsWorker(
             } else {
               hasFailure = true
               pendingDao.incrementRetry(action.id)
+              if (action.retryCount >= 5) {
+                // Tạm dừng retry liên tục để tránh hao tổn pin và nghẽn worker
+                pendingDao.updateStatus(action.id, "FAILED")
+              }
             }
           }
           else -> {
-            pendingDao.deleteAction(action.id)
+            // Không xóa nhưng đánh dấu 'UNSUPPORTED' để tránh Worker liên tục retry vô tận tác vụ chưa hỗ trợ
+            android.util.Log.w("SyncBillsWorker", "Unsupported actionType '${action.actionType}' with ID ${action.id}, marking UNSUPPORTED to prevent retry loop.")
+            pendingDao.updateStatus(action.id, "UNSUPPORTED")
           }
         }
       } catch (e: Exception) {
         hasFailure = true
         pendingDao.incrementRetry(action.id)
+        if (action.retryCount >= 5) {
+          pendingDao.updateStatus(action.id, "FAILED")
+        }
       }
     }
 

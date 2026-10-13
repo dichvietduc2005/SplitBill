@@ -57,6 +57,22 @@ class GroupDetailViewModel(
   init {
     loadAll() // Refresh ngầm trong nền
     subscribeRealtime()
+
+    // Quan sát Room bills cache qua Flow (SSOT): khi DB thay đổi, UI tự động cập nhật
+    viewModelScope.launch {
+      billRepository.observeBillsForGroup(groupId)?.collect { cachedBills ->
+        if (cachedBills.isNotEmpty()) {
+          val currentMembers = _state.value.members
+          val updatedBalances = computeBalances(cachedBills, currentMembers)
+          _state.value = _state.value.copy(
+            bills = cachedBills,
+            memberBalances = updatedBalances,
+            isLoading = false
+          )
+        }
+      }
+    }
+
     viewModelScope.launch {
       NotificationEventBus.events.collect { event ->
         if (event.groupId == groupId) {
