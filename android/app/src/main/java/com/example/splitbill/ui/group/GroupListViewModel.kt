@@ -41,6 +41,20 @@ class GroupListViewModel(
 
   init {
     loadGroups()
+
+    // Quan sát Room groups cache qua Flow (SSOT): khi DB cập nhật, UI tự cập nhật tức thì
+    viewModelScope.launch {
+      groupRepository.observeGroups()?.collect { cachedGroups ->
+        if (cachedGroups.isNotEmpty()) {
+          val current = _uiState.value
+          if (current is GroupListUiState.Success) {
+            _uiState.value = current.copy(groups = cachedGroups)
+          } else {
+            _uiState.value = GroupListUiState.Success(groups = cachedGroups)
+          }
+        }
+      }
+    }
   }
 
   fun loadGroups(onComplete: (() -> Unit)? = null) {

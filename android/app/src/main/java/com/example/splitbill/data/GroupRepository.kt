@@ -7,6 +7,8 @@ import com.example.splitbill.data.api.ActivityResponse
 import com.example.splitbill.data.supabase.*
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class GroupRepository(
   private val tokenManager: TokenManager,
@@ -15,6 +17,25 @@ class GroupRepository(
 
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val auth get() = SupabaseConfig.client.auth
+
+  /**
+   * Quan sát danh sách nhóm từ Room Database theo mô hình Single Source of Truth (SSOT).
+   */
+  fun observeGroups(): Flow<List<GroupResponse>>? {
+    val dao = groupDao ?: return null
+    return dao.observeGroups().map { localGroups ->
+      localGroups.map { g ->
+        GroupResponse(
+          id = g.id,
+          name = g.name,
+          createdBy = g.createdBy,
+          createdByName = g.createdByName,
+          memberCount = g.memberCount,
+          createdAt = g.createdAt ?: ""
+        )
+      }
+    }
+  }
 
   suspend fun getGroups(): Result<List<GroupResponse>> {
     return try {

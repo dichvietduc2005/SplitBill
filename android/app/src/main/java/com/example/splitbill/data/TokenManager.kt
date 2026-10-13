@@ -21,31 +21,37 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "se
 
 class TokenManager(private val context: Context) {
 
-  private val encryptedPrefs: SharedPreferences by lazy {
+  private val encryptedPrefs: SharedPreferences? by lazy {
     try {
-      val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-      EncryptedSharedPreferences.create(
-        context,
-        "secure_token_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-      )
+      createEncryptedPrefs()
     } catch (e: Exception) {
-      android.util.Log.e("TokenManager", "EncryptedSharedPreferences init failed, fallback to private prefs", e)
-      context.getSharedPreferences("secure_token_prefs_fallback", Context.MODE_PRIVATE)
+      // Khi KeyStore hoặc cấu hình mã hóa lỗi, không tự ý xóa file SharedPreferences để tránh mất dữ liệu không thể khôi phục.
+      // Báo lỗi rõ ràng và từ chối hoạt động mã hóa không an toàn.
+      android.util.Log.e("TokenManager", "EncryptedSharedPreferences initialization failed securely", e)
+      null
     }
+  }
+
+  private fun createEncryptedPrefs(): SharedPreferences {
+    val masterKey = MasterKey.Builder(context)
+      .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+      .build()
+
+    return EncryptedSharedPreferences.create(
+      context,
+      "secure_token_prefs",
+      masterKey,
+      EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+      EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
   }
 
   private val _jwtFlow = MutableStateFlow<String?>(null)
   private val _biometricFlow = MutableStateFlow<String?>(null)
 
   init {
-    val initialJwt = encryptedPrefs.getString(KEY_JWT, null)
-    val initialBio = encryptedPrefs.getString(KEY_BIOMETRIC, null)
+    val initialJwt = encryptedPrefs?.getString(KEY_JWT, null)
+    val initialBio = encryptedPrefs?.getString(KEY_BIOMETRIC, null)
     _jwtFlow.value = initialJwt
     _biometricFlow.value = initialBio
     cachedToken = initialJwt
@@ -58,19 +64,33 @@ class TokenManager(private val context: Context) {
           val oldJwt = oldPrefs?.get(LEGACY_JWT_KEY)
           val oldBio = oldPrefs?.get(LEGACY_BIOMETRIC_KEY)
 
-          if (!oldJwt.isNullOrBlank() && encryptedPrefs.getString(KEY_JWT, null) == null) {
+          var jwtMigrated = false
+          if (!oldJwt.isNullOrBlank() && encryptedPrefs?.getString(KEY_JWT, null) == null) {
             saveToken(oldJwt)
+            // Kiểm tra xem đã ghi thành công vào EncryptedSharedPreferences chưa
+            jwtMigrated = encryptedPrefs?.getString(KEY_JWT, null) == oldJwt
+          } else if (oldJwt.isNullOrBlank()) {
+            jwtMigrated = true
           }
-          if (!oldBio.isNullOrBlank() && encryptedPrefs.getString(KEY_BIOMETRIC, null) == null) {
+
+          var bioMigrated = false
+          if (!oldBio.isNullOrBlank() && encryptedPrefs?.getString(KEY_BIOMETRIC, null) == null) {
             saveBiometricToken(oldBio)
+            bioMigrated = encryptedPrefs?.getString(KEY_BIOMETRIC, null) == oldBio
+          } else if (oldBio.isNullOrBlank()) {
+            bioMigrated = true
           }
-          if (oldJwt != null || oldBio != null) {
+
+          // Chỉ xóa bản ghi ở DataStore cũ khi và chỉ khi bản mới đã lưu an toàn thành công
+          if (jwtMigrated && bioMigrated) {
             context.dataStore.edit { prefs ->
-              prefs.remove(LEGACY_JWT_KEY)
-              prefs.remove(LEGACY_BIOMETRIC_KEY)
+              if (!oldJwt.isNullOrBlank()) prefs.remove(LEGACY_JWT_KEY)
+              if (!oldBio.isNullOrBlank()) prefs.remove(LEGACY_BIOMETRIC_KEY)
             }
           }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+          android.util.Log.e("TokenManager", "Migration from DataStore failed, retaining old data", e)
+        }
       }
     }
   }
@@ -104,11 +124,11 @@ class TokenManager(private val context: Context) {
 
   fun getToken(): Flow<String?> = _jwtFlow.asStateFlow()
 
-  fun getUserId(): String? = getUserIdFromToken(cachedToken ?: encryptedPrefs.getString(KEY_JWT, null))
+  fun getUserId(): String? = getUserIdFromToken(cachedToken ?: encryptedPrefs?.getString(KEY_JWT, null))
 
   suspend fun getCachedToken(): String? {
     if (cachedToken != null) return cachedToken
-    val token = encryptedPrefs.getString(KEY_JWT, null)
+    val token = encryptedPrefs?.getString(KEY_JWT, null)
     cachedToken = token
     _jwtFlow.value = token
     return token
@@ -118,23 +138,23 @@ class TokenManager(private val context: Context) {
 
   suspend fun saveToken(token: String) {
     cachedToken = token
-    encryptedPrefs.edit().putString(KEY_JWT, token).apply()
+    encryptedPrefs?.edit()?.putString(KEY_JWT, token)?.apply()
     _jwtFlow.value = token
   }
 
   suspend fun saveBiometricToken(token: String) {
-    encryptedPrefs.edit().putString(KEY_BIOMETRIC, token).apply()
+    encryptedPrefs?.edit()?.putString(KEY_BIOMETRIC, token)?.apply()
     _biometricFlow.value = token
   }
 
   suspend fun deleteToken() {
     cachedToken = null
-    encryptedPrefs.edit().remove(KEY_JWT).apply()
+    encryptedPrefs?.edit()?.remove(KEY_JWT)?.apply()
     _jwtFlow.value = null
   }
 
   suspend fun deleteBiometricToken() {
-    encryptedPrefs.edit().remove(KEY_BIOMETRIC).apply()
+    encryptedPrefs?.edit()?.remove(KEY_BIOMETRIC)?.apply()
     _biometricFlow.value = null
   }
 }
