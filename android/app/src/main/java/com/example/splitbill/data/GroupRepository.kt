@@ -7,6 +7,8 @@ import com.example.splitbill.data.api.ActivityResponse
 import com.example.splitbill.data.supabase.*
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -31,48 +33,96 @@ class GroupRepository(
           createdBy = g.createdBy,
           createdByName = g.createdByName,
           memberCount = g.memberCount,
-          createdAt = g.createdAt ?: ""
+          createdAt = g.createdAt ?: "",
+          bannerUrl = getLocalGroupBanner(g.id)
         )
       }
+    }
+  }
+
+  fun getLocalGroupBanner(groupId: String): String? {
+    return try {
+      tokenManager.getContext().getSharedPreferences("group_banners", android.content.Context.MODE_PRIVATE)
+        .getString("banner_$groupId", null)
+    } catch (_: Exception) { null }
+  }
+
+  fun saveLocalGroupBanner(groupId: String, bannerUrl: String) {
+    try {
+      tokenManager.getContext().getSharedPreferences("group_banners", android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putString("banner_$groupId", bannerUrl)
+        .apply()
+    } catch (_: Exception) {}
+  }
+
+  suspend fun updateGroupBanner(groupId: String, bannerUrl: String): Result<Unit> {
+    saveLocalGroupBanner(groupId, bannerUrl)
+    groupDao?.let { dao ->
+      try {
+        val local = dao.getGroupById(groupId)
+        if (local != null) {
+          dao.insertGroup(local.copy(updatedAt = System.currentTimeMillis()))
+        }
+      } catch (_: Exception) {}
+    }
+    return try {
+      SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
+      postgrest["groups"].update({
+        set("icon", bannerUrl)
+      }) {
+        filter { eq("id", groupId) }
+      }
+      Result.success(Unit)
+    } catch (e: Exception) {
+      Result.success(Unit)
     }
   }
 
   suspend fun getGroups(): Result<List<GroupResponse>> {
     return try {
       val cachedToken = tokenManager.getCachedToken()
-      SupabaseConfig.ensureSession(cachedToken, tokenManager)
-      val currentUserId = auth.currentUserOrNull()?.id 
-        ?: TokenManager.getUserIdFromToken(cachedToken)
-      if (currentUserId == null) {
-        return Result.failure(Exception("Chưa đăng nhập"))
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val currentUserId = auth.currentUserOrNull()?.id
+      if (!sessionValid || currentUserId == null || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        throw Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn")
       }
 
-      // 1. Lấy nhóm từ bảng group_members mà user tham gia
-      val memberRecords = try {
-        postgrest["group_members"]
-          .select { filter { eq("user_id", currentUserId) } }
-          .decodeList<GroupMemberEntity>()
-      } catch (e: Exception) {
-        android.util.Log.w("GroupRepository", "Query group_members failed: ${e.message}")
-        emptyList()
+      // Tải song song danh sách nhóm trực tiếp và thành viên nhóm
+      val (directGroups, memberRecords) = coroutineScope {
+        val dgDeferred = async {
+          try {
+            postgrest["groups"].select().decodeList<GroupEntity>()
+          } catch (e: Exception) {
+            if (SupabaseConfig.isAuthError(e)) throw e
+            android.util.Log.w("GroupRepository", "Query direct groups failed: ${e.message}")
+            emptyList()
+          }
+        }
+        val mrDeferred = async {
+          try {
+            postgrest["group_members"]
+              .select { filter { eq("user_id", currentUserId) } }
+              .decodeList<GroupMemberEntity>()
+          } catch (e: Exception) {
+            if (SupabaseConfig.isAuthError(e)) throw e
+            android.util.Log.w("GroupRepository", "Query group_members failed: ${e.message}")
+            emptyList()
+          }
+        }
+        Pair(dgDeferred.await(), mrDeferred.await())
       }
+
       val memberGroupIds = memberRecords.map { it.groupId }
-
-      // 2. Lấy trực tiếp tất cả nhóm mà user có quyền xem từ Supabase (RLS cho phép: is_group_member OR created_by = auth.uid())
-      val directGroups = try {
-        postgrest["groups"].select().decodeList<GroupEntity>()
-      } catch (e: Exception) {
-        android.util.Log.w("GroupRepository", "Query direct groups failed: ${e.message}")
-        emptyList()
-      }
-
-      // 3. Lấy thêm theo groupIds từ memberRecords nếu directGroups chưa bao gồm
-      val groupsFromMemberIds = if (memberGroupIds.isNotEmpty()) {
+      val missingIds = memberGroupIds - directGroups.map { it.id }.toSet()
+      val groupsFromMemberIds = if (missingIds.isNotEmpty()) {
         try {
           postgrest["groups"]
-            .select { filter { isIn("id", memberGroupIds) } }
+            .select { filter { isIn("id", missingIds) } }
             .decodeList<GroupEntity>()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+          if (SupabaseConfig.isAuthError(e)) throw e
           emptyList()
         }
       } else emptyList()
@@ -89,19 +139,22 @@ class GroupRepository(
         postgrest["group_members"]
           .select { filter { isIn("group_id", groupIds) } }
           .decodeList<GroupMemberEntity>()
-      } catch (_: Exception) {
+      } catch (e: Exception) {
+        if (SupabaseConfig.isAuthError(e)) throw e
         emptyList()
       }
       val memberCountMap = allMembers.groupBy { it.groupId }.mapValues { it.value.size }
 
       val result = groups.map { g ->
+        val banner = getLocalGroupBanner(g.id) ?: g.icon?.takeIf { it.isNotBlank() && it != "default" }
         GroupResponse(
           id = g.id,
           name = g.name,
           createdBy = g.createdBy ?: "",
           createdByName = "",
           memberCount = memberCountMap[g.id] ?: 1,
-          createdAt = g.createdAt ?: ""
+          createdAt = g.createdAt ?: "",
+          bannerUrl = banner
         )
       }
 
@@ -123,6 +176,9 @@ class GroupRepository(
 
       Result.success(result)
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       // Fallback offline từ Room cache
       if (groupDao != null) {
         try {
@@ -135,7 +191,8 @@ class GroupRepository(
                 createdBy = g.createdBy,
                 createdByName = g.createdByName,
                 memberCount = g.memberCount,
-                createdAt = g.createdAt ?: ""
+                createdAt = g.createdAt ?: "",
+                bannerUrl = getLocalGroupBanner(g.id)
               )
             }
             return Result.success(cachedResult)
@@ -150,6 +207,9 @@ class GroupRepository(
   suspend fun getGroupDetails(groupId: String): Result<GroupResponse> {
     return try {
       SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
+      if (auth.currentSessionOrNull() == null) {
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
       val group = postgrest["groups"]
         .select { filter { eq("id", groupId) } }
         .decodeSingle<GroupEntity>()
@@ -158,6 +218,8 @@ class GroupRepository(
         .select { filter { eq("group_id", groupId) } }
         .decodeList<GroupMemberEntity>()
 
+      val banner = getLocalGroupBanner(group.id) ?: group.icon?.takeIf { it.isNotBlank() && it != "default" }
+
       Result.success(
         GroupResponse(
           id = group.id,
@@ -165,7 +227,8 @@ class GroupRepository(
           createdBy = group.createdBy ?: "",
           createdByName = "",
           memberCount = members.size,
-          createdAt = group.createdAt ?: ""
+          createdAt = group.createdAt ?: "",
+          bannerUrl = banner
         )
       )
     } catch (e: Exception) {
@@ -175,9 +238,9 @@ class GroupRepository(
 
   suspend fun createGroup(name: String): Result<GroupResponse> {
     return try {
+      SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
       val currentUserId = auth.currentUserOrNull()?.id
-        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+        ?: return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
 
       android.util.Log.d("SplitBill_Group", "Bắt đầu tạo nhóm '$name' bởi user: $currentUserId")
 
