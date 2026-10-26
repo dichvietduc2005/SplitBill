@@ -16,7 +16,8 @@ sealed interface GroupListUiState {
     val groups: List<GroupResponse>,
     val actionMessage: String? = null,
     val totalToReceive: Double = 0.0,
-    val totalToPay: Double = 0.0
+    val totalToPay: Double = 0.0,
+    val groupSpentMap: Map<String, Double> = emptyMap()
   ) : GroupListUiState
   data class Error(val message: String) : GroupListUiState
 }
@@ -75,10 +76,12 @@ class GroupListViewModel(
           viewModelScope.launch {
             val stats = statsRepository?.getUserStats()?.getOrNull()
             if (stats != null) {
+              val spentMap = stats.spentByGroup.associate { it.groupId to it.amount }
               val updatedState = GroupListUiState.Success(
                 groups = groups,
                 totalToReceive = stats.totalOthersOweToMe,
-                totalToPay = stats.totalOwedToOthers
+                totalToPay = stats.totalOwedToOthers,
+                groupSpentMap = spentMap
               )
               _uiState.value = updatedState
               cachedState = updatedState

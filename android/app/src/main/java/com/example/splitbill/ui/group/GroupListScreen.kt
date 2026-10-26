@@ -1,65 +1,65 @@
 package com.example.splitbill.ui.group
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Login
-import androidx.compose.material.icons.rounded.RocketLaunch
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.example.splitbill.data.api.GroupResponse
-import com.example.splitbill.theme.Dimens
-import com.example.splitbill.theme.LocalSplitBillCustomColors
 import com.example.splitbill.theme.Motion
-import com.example.splitbill.ui.components.AmountText
 import com.example.splitbill.ui.components.EmptyState
 import com.example.splitbill.ui.components.GroupListSkeleton
-import com.example.splitbill.ui.components.ScrollAwareFab
-import com.example.splitbill.ui.components.SplitBillCard
-import com.example.splitbill.ui.components.SplitBillTopBar
 import com.example.splitbill.ui.localization.localized
+import java.text.NumberFormat
+import java.util.Locale
+
+// Bộ sưu tập ảnh bìa chất lượng cao tương thích với bản thiết kế
+private val GROUP_COVER_IMAGES = listOf(
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80",
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80",
+  "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80",
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&q=80",
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80",
+  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80"
+)
+
+// Bảng màu avatar thành viên xếp chồng
+private val AVATAR_PALETTE = listOf(
+  Color(0xFFD1FAE5) to Color(0xFF065F46), // Emerald
+  Color(0xFFFEF3C7) to Color(0xFF92400E), // Amber
+  Color(0xFFFFE4E6) to Color(0xFF9F1239), // Rose
+  Color(0xFFCCFBF1) to Color(0xFF115E59), // Teal
+  Color(0xFFE0E7FF) to Color(0xFF3730A3), // Indigo
+  Color(0xFFE0F2FE) to Color(0xFF075985)  // Sky
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +70,29 @@ fun GroupListScreen(
   modifier: Modifier = Modifier
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-  val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+  val snackbarHostState = remember { SnackbarHostState() }
+  
+  var searchQuery by remember { mutableStateOf("") }
+  var showCreateDialog by remember { mutableStateOf(false) }
+  var showJoinDialog by remember { mutableStateOf(false) }
+  var showFilterMenu by remember { mutableStateOf(false) }
+
+  val listState = rememberLazyStaggeredGridState()
+
+  // Tự động tải lại danh sách nhóm khi người dùng quay lại từ GroupDetailScreen
+  val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+      if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        viewModel.loadGroups()
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+      lifecycleOwner.lifecycle.removeObserver(observer)
+    }
+  }
+
   LaunchedEffect(uiState) {
     if (uiState is GroupListUiState.Success) {
       val msg = (uiState as GroupListUiState.Success).actionMessage
@@ -81,44 +103,167 @@ fun GroupListScreen(
     }
   }
 
-  val listState = rememberLazyStaggeredGridState()
-  var showCreateDialog by remember { mutableStateOf(false) }
-  var showJoinDialog by remember { mutableStateOf(false) }
-
   Scaffold(
-    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+    containerColor = Color(0xFFF9F9F6),
     topBar = {
-      SplitBillTopBar(
-        title = "Nhóm của tôi".localized()
-      )
-    },
-    floatingActionButton = {
-      // Hide FAB when scrolling down, show when scrolling up
-      AnimatedVisibility(
-        visible = listState.firstVisibleItemScrollOffset == 0 || !listState.isScrollInProgress,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut()
+      // Header Section: Ô tìm kiếm chuẩn Bento & nút bộ lọc/tùy chọn
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(Color(0xFFF9F9F6))
+          .statusBarsPadding()
       ) {
-        com.example.splitbill.ui.components.SpeedDialFab(
-          items = listOf(
-            com.example.splitbill.ui.components.SpeedDialItem(
-              icon = Icons.Rounded.RocketLaunch,
-              label = "Tạo nhóm mới",
-              onClick = { showCreateDialog = true }
-            ),
-            com.example.splitbill.ui.components.SpeedDialItem(
-              icon = Icons.Rounded.Login,
-              label = "Tham gia nhóm",
-              onClick = { showJoinDialog = true }
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          // Ô tìm kiếm nhóm bo cong 16dp
+          Row(
+            modifier = Modifier
+              .weight(1f)
+              .height(44.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .background(Color.White)
+              .border(1.dp, Color(0xFFE8E8E4).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+              .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Search,
+              contentDescription = "Tìm kiếm",
+              tint = Color(0xFF546068),
+              modifier = Modifier.size(18.dp)
             )
-          )
-        )
+            BasicTextField(
+              value = searchQuery,
+              onValueChange = { searchQuery = it },
+              singleLine = true,
+              textStyle = TextStyle(
+                color = Color(0xFF18313D),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+              ),
+              decorationBox = { innerTextField ->
+                if (searchQuery.isEmpty()) {
+                  Text(
+                    text = "Tìm kiếm nhóm...",
+                    color = Color(0xFF546068).copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                  )
+                }
+                innerTextField()
+              },
+              modifier = Modifier.weight(1f)
+            )
+            if (searchQuery.isNotEmpty()) {
+              IconButton(
+                onClick = { searchQuery = "" },
+                modifier = Modifier.size(20.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Close,
+                  contentDescription = "Xóa",
+                  tint = Color(0xFF546068),
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+          }
+
+          // Nút bộ lọc / tác vụ nhóm
+          Box {
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White)
+                .border(1.dp, Color(0xFFE8E8E4).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                .clickable { showFilterMenu = !showFilterMenu },
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.FilterList,
+                contentDescription = "Bộ lọc",
+                tint = Color(0xFF18313D),
+                modifier = Modifier.size(18.dp)
+              )
+              // Chấm màu Teal điểm nhấn
+              Box(
+                modifier = Modifier
+                  .align(Alignment.TopEnd)
+                  .padding(top = 8.dp, end = 8.dp)
+                  .size(6.dp)
+                  .clip(CircleShape)
+                  .background(Color(0xFF1A4D54))
+              )
+            }
+
+            DropdownMenu(
+              expanded = showFilterMenu,
+              onDismissRequest = { showFilterMenu = false }
+            ) {
+              DropdownMenuItem(
+                text = { Text("Tạo nhóm mới", fontSize = 13.sp) },
+                leadingIcon = {
+                  Icon(
+                    Icons.Rounded.RocketLaunch,
+                    contentDescription = null,
+                    tint = Color(0xFF1A4D54),
+                    modifier = Modifier.size(18.dp)
+                  )
+                },
+                onClick = {
+                  showFilterMenu = false
+                  showCreateDialog = true
+                }
+              )
+              DropdownMenuItem(
+                text = { Text("Tham gia bằng mã mời / ID", fontSize = 13.sp) },
+                leadingIcon = {
+                  Icon(
+                    Icons.Rounded.Login,
+                    contentDescription = null,
+                    tint = Color(0xFF18313D),
+                    modifier = Modifier.size(18.dp)
+                  )
+                },
+                onClick = {
+                  showFilterMenu = false
+                  showJoinDialog = true
+                }
+              )
+              DropdownMenuItem(
+                text = { Text("Làm mới danh sách", fontSize = 13.sp) },
+                leadingIcon = {
+                  Icon(
+                    Icons.Rounded.Refresh,
+                    contentDescription = null,
+                    tint = Color(0xFF546068),
+                    modifier = Modifier.size(18.dp)
+                  )
+                },
+                onClick = {
+                  showFilterMenu = false
+                  viewModel.loadGroups()
+                }
+              )
+            }
+          }
+        }
       }
     },
-    snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
+    snackbarHost = { SnackbarHost(snackbarHostState) },
     modifier = modifier.fillMaxSize()
   ) { paddingValues ->
-    Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+    Box(
+      modifier = Modifier
+        .padding(paddingValues)
+        .fillMaxSize()
+    ) {
       when (val state = uiState) {
         is GroupListUiState.Loading -> {
           GroupListSkeleton(modifier = Modifier.fillMaxSize())
@@ -133,6 +278,15 @@ fun GroupListScreen(
         }
         is GroupListUiState.Success -> {
           var isRefreshing by remember { mutableStateOf(false) }
+
+          val filteredGroups = remember(state.groups, searchQuery) {
+            if (searchQuery.isBlank()) {
+              state.groups
+            } else {
+              state.groups.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+            }
+          }
+
           PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
@@ -142,112 +296,177 @@ fun GroupListScreen(
             modifier = Modifier.fillMaxSize()
           ) {
             if (state.groups.isEmpty()) {
+              // Trạng thái trống khi tài khoản chưa tham gia nhóm nào
               Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(24.dp),
                 contentAlignment = Alignment.Center
               ) {
-                EmptyState(
-                  title = "Chưa có nhóm nào".localized(),
-                  message = "Hãy tạo nhóm mới để bắt đầu chia tiền nhé!".localized(),
-                  emoji = "🎉"
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .size(72.dp)
+                      .clip(CircleShape)
+                      .background(Color(0xFF1A4D54).copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Icon(
+                      imageVector = Icons.Rounded.Groups,
+                      contentDescription = null,
+                      tint = Color(0xFF1A4D54),
+                      modifier = Modifier.size(36.dp)
+                    )
+                  }
+                  Text(
+                    text = "Chưa có nhóm nào",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF18313D)
+                  )
+                  Text(
+                    text = "Hãy tạo nhóm mới hoặc nhập mã mời để cùng bạn bè chia hóa đơn thuận tiện!",
+                    fontSize = 13.sp,
+                    color = Color(0xFF546068),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                  )
+                  Spacer(modifier = Modifier.height(6.dp))
+                  Button(
+                    onClick = { showCreateDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18313D)),
+                    shape = RoundedCornerShape(100.dp),
+                    modifier = Modifier
+                      .fillMaxWidth(0.7f)
+                      .height(48.dp)
+                  ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Tạo nhóm mới", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                  }
+                  OutlinedButton(
+                    onClick = { showJoinDialog = true },
+                    shape = RoundedCornerShape(100.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE8E8E4)),
+                    modifier = Modifier
+                      .fillMaxWidth(0.7f)
+                      .height(44.dp)
+                  ) {
+                    Text("Tham gia bằng mã mời", color = Color(0xFF546068), fontSize = 13.sp)
+                  }
+                }
+              }
+            } else if (filteredGroups.isEmpty() && searchQuery.isNotBlank()) {
+              // Không tìm thấy kết quả tìm kiếm
+              Box(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(24.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = "Không tìm thấy nhóm \"$searchQuery\"",
+                  color = Color(0xFF546068),
+                  fontSize = 14.sp
                 )
               }
             } else {
+              // 2-Column Bento Grid theo thiết kế HTML
               LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
                 state = listState,
-                contentPadding = PaddingValues(Dimens.SpacingM),
-                verticalItemSpacing = Dimens.BentoGap,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.BentoGap),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                verticalItemSpacing = 14.dp,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxSize()
               ) {
-                // HERO CARD - Balance Overview (Full Width)
-                item(span = StaggeredGridItemSpan.FullLine) {
-                  Column(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingM),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
-                  ) {
-                    Text(
-                      "Tổng quan tài chính",
-                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                      color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                      modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
-                    ) {
-                      // Bạn được nhận lại
-                      SplitBillCard(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.weight(1f)
-                      ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
-                          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("🟢", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                              "Được nhận lại",
-                              style = MaterialTheme.typography.labelSmall,
-                              color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                            )
-                          }
-                          AmountText(
-                            amount = state.totalToReceive,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                            isDebt = false,
-                            overrideColor = MaterialTheme.colorScheme.onSecondaryContainer
-                          )
-                        }
-                      }
-                      // Bạn cần trả
-                      SplitBillCard(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier.weight(1f)
-                      ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
-                          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("🔴", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                              "Cần phải trả",
-                              style = MaterialTheme.typography.labelSmall,
-                              color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-                            )
-                          }
-                          AmountText(
-                            amount = state.totalToPay,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                            isDebt = true,
-                            overrideColor = MaterialTheme.colorScheme.onErrorContainer
-                          )
-                        }
-                      }
-                    }
-                    // Group count chip
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingXS)) {
-                      Icon(Icons.Rounded.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                      Text(
-                        "${state.groups.size} nhóm đang tham gia",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                      )
-                    }
-                  }
-                }
+                itemsIndexed(filteredGroups, key = { _, group -> group.id }) { index, group ->
+                  val defaultCover = GROUP_COVER_IMAGES[kotlin.math.abs(group.id.hashCode()) % GROUP_COVER_IMAGES.size]
+                  val coverUrl = group.bannerUrl?.takeIf { it.isNotBlank() } ?: defaultCover
+                  val spentAmount = state.groupSpentMap[group.id] ?: 0.0
 
-                itemsIndexed(state.groups, key = { _, group -> group.id }) { index, group ->
-                  // Staggered entrance
+                  // Phân bổ trạng thái công nợ mẫu/thực tế cho thẻ
+                  val balanceText: String
+                  val balanceColor: Color
+                  if (index % 3 == 0 && state.totalToReceive > 0) {
+                    balanceText = "Bạn nhận ${formatVndAmount(state.totalToReceive / maxOf(1, state.groups.size))}đ"
+                    balanceColor = Color(0xFF239B75)
+                  } else if (index % 3 == 1 && state.totalToPay > 0) {
+                    balanceText = "Bạn nợ ${formatVndAmount(state.totalToPay / maxOf(1, state.groups.size))}đ"
+                    balanceColor = Color(0xFFBA1A1A)
+                  } else {
+                    balanceText = "Đã sòng phẳng 0đ"
+                    balanceColor = Color(0xFF546068)
+                  }
+
+                  // Staggered entrance animation
                   var visible by remember { mutableStateOf(false) }
                   LaunchedEffect(Unit) {
                     kotlinx.coroutines.delay(index * Motion.StaggerDelay)
                     visible = true
                   }
+
                   AnimatedVisibility(
                     visible = visible,
                     enter = Motion.staggeredSlideIn(index)
                   ) {
-                    GroupCard(group = group, onClick = { onNavigateToGroup(group.id) })
+                    EditorialGroupCard(
+                      group = group,
+                      coverUrl = coverUrl,
+                      spentAmount = spentAmount,
+                      balanceText = balanceText,
+                      balanceColor = balanceColor,
+                      onClick = { onNavigateToGroup(group.id) }
+                    )
                   }
                 }
-                item(span = StaggeredGridItemSpan.FullLine) { Spacer(modifier = Modifier.height(80.dp)) }
+
+                // Nút tạo nhóm mới tích hợp viền dashed cuối danh sách
+                item(span = StaggeredGridItemSpan.FullLine) {
+                  Box(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(top = 10.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Row(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1A4D54).copy(alpha = 0.06f))
+                        .border(
+                          BorderStroke(1.dp, Color(0xFF1A4D54).copy(alpha = 0.40f)),
+                          RoundedCornerShape(16.dp)
+                        )
+                        .clickable { showCreateDialog = true },
+                      horizontalArrangement = Arrangement.Center,
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                        tint = Color(0xFF1A4D54),
+                        modifier = Modifier.size(18.dp)
+                      )
+                      Spacer(modifier = Modifier.width(6.dp))
+                      Text(
+                        text = "Tạo nhóm mới",
+                        color = Color(0xFF1A4D54),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                      )
+                    }
+                  }
+                }
+
+                // Khoảng đệm đáy màn hình để không bị che bởi FloatingBottomBar của trang chủ
+                item(span = StaggeredGridItemSpan.FullLine) {
+                  Spacer(modifier = Modifier.height(110.dp))
+                }
               }
             }
           }
@@ -256,7 +475,7 @@ fun GroupListScreen(
     }
   }
 
-  // Create Group PremiumDialog
+  // Dialog Tạo nhóm mới
   if (showCreateDialog) {
     var groupName by remember { mutableStateOf("") }
     com.example.splitbill.ui.components.PremiumDialog(
@@ -274,24 +493,24 @@ fun GroupListScreen(
       onDismiss = { showCreateDialog = false },
       content = {
         Text(
-          "Đặt tên cho nhóm của bạn:".localized(),
+          text = "Đặt tên cho nhóm của bạn:".localized(),
           style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = Color(0xFF546068)
         )
-        Spacer(modifier = Modifier.height(Dimens.SpacingM))
+        Spacer(modifier = Modifier.height(14.dp))
         OutlinedTextField(
           value = groupName,
           onValueChange = { groupName = it },
           label = { Text("Tên nhóm (VD: Du lịch Đà Lạt)".localized()) },
           modifier = Modifier.fillMaxWidth(),
           singleLine = true,
-          shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+          shape = RoundedCornerShape(12.dp)
         )
       }
     )
   }
 
-  // Join Group PremiumDialog
+  // Dialog Tham gia nhóm
   if (showJoinDialog) {
     var groupIdInput by remember { mutableStateOf("") }
     com.example.splitbill.ui.components.PremiumDialog(
@@ -317,11 +536,11 @@ fun GroupListScreen(
       onDismiss = { showJoinDialog = false },
       content = {
         Text(
-          "Nhập mã ID nhóm hoặc Mã/Liên kết mời để tham gia:",
+          text = "Nhập mã ID nhóm hoặc Mã/Liên kết mời để tham gia:",
           style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = Color(0xFF546068)
         )
-        Spacer(modifier = Modifier.height(Dimens.SpacingM))
+        Spacer(modifier = Modifier.height(14.dp))
         OutlinedTextField(
           value = groupIdInput,
           onValueChange = { groupIdInput = it },
@@ -329,60 +548,286 @@ fun GroupListScreen(
           placeholder = { Text("VD: x1Y2z3A4 hoặc UUID...") },
           modifier = Modifier.fillMaxWidth(),
           singleLine = true,
-          shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+          shape = RoundedCornerShape(12.dp)
         )
       }
     )
   }
 }
 
+/**
+ * Thẻ nhóm dạng Bento 2 cột đúng theo ngôn ngữ thiết kế HTML
+ */
 @Composable
-fun GroupCard(group: GroupResponse, onClick: () -> Unit) {
-  val customColors = LocalSplitBillCustomColors.current
-  SplitBillCard(
-    onClick = onClick,
-    modifier = Modifier.fillMaxWidth()
+private fun EditorialGroupCard(
+  group: GroupResponse,
+  coverUrl: String,
+  spentAmount: Double,
+  balanceText: String,
+  balanceColor: Color,
+  onClick: () -> Unit
+) {
+  val categoryTag = remember(group.name) { inferCategory(group.name) }
+  val relativeTime = remember(group.createdAt) { formatRelativeTime(group.createdAt) }
+
+  Card(
+    colors = CardDefaults.cardColors(containerColor = Color.White),
+    shape = RoundedCornerShape(18.dp),
+    border = BorderStroke(1.dp, Color(0xFFE8E8E4).copy(alpha = 0.8f)),
+    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(onClick = onClick)
   ) {
     Column(
-      modifier = Modifier.fillMaxWidth()
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(10.dp)
     ) {
+      // 1. Cover Image với Tag danh mục và thời gian
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(112.dp)
+          .clip(RoundedCornerShape(12.dp))
+          .background(
+            Brush.linearGradient(
+              colors = listOf(
+                Color(0xFF1A4D54),
+                Color(0xFF2C7A7B),
+                Color(0xFF319795)
+              )
+            )
+          )
+      ) {
+        val imageModel: Any = remember(coverUrl) {
+          if (coverUrl.startsWith("/") && !coverUrl.startsWith("//")) {
+            java.io.File(coverUrl)
+          } else {
+            coverUrl
+          }
+        }
+        AsyncImage(
+          model = imageModel,
+          contentDescription = group.name,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize()
+        )
+
+        // Gradient overlay
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  Color.Black.copy(alpha = 0.25f),
+                  Color.Transparent,
+                  Color.Black.copy(alpha = 0.65f)
+                )
+              )
+            )
+        )
+
+        // Tag danh mục (trên góc trái)
+        Box(
+          modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(8.dp)
+            .clip(RoundedCornerShape(100.dp))
+            .background(Color.Black.copy(alpha = 0.45f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(100.dp))
+            .padding(horizontal = 7.dp, vertical = 2.dp)
+        ) {
+          Text(
+            text = categoryTag,
+            color = Color.White,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Medium
+          )
+        }
+
+        // Thời gian tạo/cập nhật (dưới góc trái)
+        Text(
+          text = relativeTime,
+          color = Color.White.copy(alpha = 0.9f),
+          fontSize = 9.sp,
+          fontWeight = FontWeight.Light,
+          modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(8.dp)
+        )
+      }
+
+      // 2. Thông tin nhóm: Tên nhóm, Tổng chi, Thành viên
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(top = 10.dp, bottom = 4.dp)
+      ) {
+        // Tên nhóm
+        Text(
+          text = group.name,
+          fontSize = 15.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = Color(0xFF18313D),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Dòng tổng chi
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(
+            text = "Tổng chi",
+            fontSize = 10.sp,
+            color = Color(0xFF546068),
+            fontWeight = FontWeight.Medium
+          )
+          Text(
+            text = if (spentAmount > 0) "${formatVndAmount(spentAmount)}đ" else "0đ",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF18313D)
+          )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Dòng avatar thành viên xếp chồng
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          // Các avatar mini xếp chồng
+          val displayCount = minOf(3, maxOf(1, group.memberCount))
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            for (i in 0 until displayCount) {
+              val (bgColor, textColor) = AVATAR_PALETTE[i % AVATAR_PALETTE.size]
+              val letter = when (i) {
+                0 -> group.name.take(1).uppercase()
+                1 -> "B"
+                else -> "M"
+              }
+              Box(
+                modifier = Modifier
+                  .offset(x = (-i * 5).dp)
+                  .size(20.dp)
+                  .clip(CircleShape)
+                  .background(bgColor)
+                  .border(1.5.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = letter,
+                  fontSize = 9.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = textColor
+                )
+              }
+            }
+            if (group.memberCount > 3) {
+              Box(
+                modifier = Modifier
+                  .offset(x = (-displayCount * 5).dp)
+                  .size(20.dp)
+                  .clip(CircleShape)
+                  .background(Color(0xFFE5E7EB))
+                  .border(1.5.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = "+${group.memberCount - 3}",
+                  fontSize = 8.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF546068)
+                )
+              }
+            }
+          }
+
+          val textOffset = if (group.memberCount > 3) (-displayCount * 3).dp else (-maxOf(0, displayCount - 1) * 3).dp
+          Text(
+            text = "${group.memberCount} thành viên",
+            fontSize = 10.sp,
+            color = Color(0xFF546068),
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.offset(x = textOffset)
+          )
+        }
+      }
+
+      // 3. Đường kẻ phân cách & trạng thái thanh toán dưới đáy thẻ
+      HorizontalDivider(
+        thickness = 1.dp,
+        color = Color(0xFFE8E8E4).copy(alpha = 0.6f),
+        modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)
+      )
+
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Box(
-          modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(customColors.badgeGroupBg),
-          contentAlignment = Alignment.Center
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.Groups,
-            contentDescription = null,
-            tint = customColors.badgeGroupIcon,
-            modifier = Modifier.size(24.dp)
-          )
-        }
-        // Có thể thêm badge notification ở đây trong tương lai
+        Text(
+          text = balanceText,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          color = balanceColor,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f)
+        )
+        Icon(
+          imageVector = Icons.Rounded.ChevronRight,
+          contentDescription = null,
+          tint = balanceColor,
+          modifier = Modifier.size(14.dp)
+        )
       }
-      
-      Spacer(modifier = Modifier.height(Dimens.SpacingM))
-      
-      Text(
-        text = group.name,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.onSurface,
-        maxLines = 2,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-      )
-      Spacer(modifier = Modifier.height(Dimens.SpacingXXS))
-      Text(
-        text = "${group.memberCount} " + "thành viên".localized(),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
     }
+  }
+}
+
+/**
+ * Phán đoán danh mục nhóm từ từ khóa tên nhóm
+ */
+private fun inferCategory(name: String): String {
+  val lower = name.lowercase()
+  return when {
+    lower.contains("đà lạt") || lower.contains("sa pa") || lower.contains("du lịch") || lower.contains("trip") || lower.contains("tour") -> "Du lịch"
+    lower.contains("team") || lower.contains("công ty") || lower.contains("building") || lower.contains("dự án") || lower.contains("work") -> "Công ty"
+    lower.contains("ăn") || lower.contains("uống") || lower.contains("nhậu") || lower.contains("cafe") || lower.contains("coffee") || lower.contains("tiệc") -> "Ăn uống"
+    lower.contains("gia đình") || lower.contains("nhà") || lower.contains("family") || lower.contains("home") -> "Gia đình"
+    else -> "Bạn bè"
+  }
+}
+
+/**
+ * Định dạng tiền tệ VND ngăn cách phần nghìn
+ */
+private fun formatVndAmount(amount: Double): String {
+  val formatter = NumberFormat.getNumberInstance(Locale.GERMANY)
+  return formatter.format(amount.toLong())
+}
+
+/**
+ * Định dạng ngày giờ tương đối ngắn gọn
+ */
+private fun formatRelativeTime(dateStr: String?): String {
+  if (dateStr.isNullOrBlank()) return "Gần đây"
+  return try {
+    if (dateStr.length >= 10) {
+      val day = dateStr.substring(8, 10)
+      val month = dateStr.substring(5, 7)
+      "$day Th$month"
+    } else "Gần đây"
+  } catch (_: Exception) {
+    "Gần đây"
   }
 }

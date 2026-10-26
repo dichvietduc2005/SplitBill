@@ -12,6 +12,7 @@ import kotlinx.serialization.json.put
 class AuthRepository(private val tokenManager: TokenManager) {
   
   private fun clearAllCaches() {
+    com.example.splitbill.ui.home.HomeScreenViewModel.clearCache()
     com.example.splitbill.ui.group.GroupListViewModel.clearCache()
     com.example.splitbill.ui.profile.ProfileViewModel.clearCache()
     com.example.splitbill.ui.settings.SettingsViewModel.clearCache()
@@ -118,10 +119,10 @@ class AuthRepository(private val tokenManager: TokenManager) {
   suspend fun isLoggedIn(): Boolean {
     val session = SupabaseConfig.client.auth.currentSessionOrNull()
     if (session != null) return true
-    val token = tokenManager.getToken().first()
+    val token = tokenManager.getCachedToken() ?: tokenManager.getToken().first()
     if (!token.isNullOrBlank()) {
-      SupabaseConfig.ensureSession(token)
-      return true
+      val success = SupabaseConfig.ensureSession(token, tokenManager)
+      return success && SupabaseConfig.client.auth.currentSessionOrNull() != null
     }
     return false
   }

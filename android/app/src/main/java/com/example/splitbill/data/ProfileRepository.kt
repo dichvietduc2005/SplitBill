@@ -17,9 +17,13 @@ class ProfileRepository(private val tokenManager: TokenManager) {
   /** Lấy profile của người dùng đang đăng nhập */
   suspend fun getMyProfile(): Result<ProfileResponse> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val userId = auth.currentUserOrNull()?.id
-        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+      if (!sessionValid || userId == null || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
 
       val profile = postgrest["profiles"]
         .select { filter { eq("id", userId) } }
@@ -37,6 +41,9 @@ class ProfileRepository(private val tokenManager: TokenManager) {
         )
       )
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       Result.failure(e)
     }
   }

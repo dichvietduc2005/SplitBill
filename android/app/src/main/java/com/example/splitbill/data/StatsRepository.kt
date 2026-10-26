@@ -5,6 +5,8 @@ import com.example.splitbill.data.supabase.*
 import com.example.splitbill.utils.DebtSimplifier
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 class StatsRepository(private val tokenManager: TokenManager) {
 
@@ -14,10 +16,12 @@ class StatsRepository(private val tokenManager: TokenManager) {
   suspend fun getUserStats(): Result<UserStatsResponse> {
     return try {
       val cachedToken = tokenManager.getCachedToken()
-      SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val userId = auth.currentUserOrNull()?.id
-        ?: TokenManager.getUserIdFromToken(cachedToken)
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+      if (!sessionValid || userId == null || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
 
       val memberRecords = postgrest["group_members"]
         .select { filter { eq("user_id", userId) } }
@@ -30,14 +34,27 @@ class StatsRepository(private val tokenManager: TokenManager) {
       }
 
       val groupIds = memberRecords.map { it.groupId }
-      val groups = postgrest["groups"]
-        .select { filter { isIn("id", groupIds) } }
-        .decodeList<GroupEntity>()
-      val groupMap = groups.associate { it.id to it.name }
 
-      val allBills = postgrest["bills"]
-        .select { filter { isIn("group_id", groupIds) } }
-        .decodeList<BillEntity>()
+      // Tải song song danh sách nhóm, hóa đơn và thanh quyết toán
+      val (groups, allBills, allSettlements) = coroutineScope {
+        val groupsDeferred = async {
+          postgrest["groups"]
+            .select { filter { isIn("id", groupIds) } }
+            .decodeList<GroupEntity>()
+        }
+        val allBillsDeferred = async {
+          postgrest["bills"]
+            .select { filter { isIn("group_id", groupIds) } }
+            .decodeList<BillEntity>()
+        }
+        val allSettlementsDeferred = async {
+          postgrest["settlements"]
+            .select { filter { isIn("group_id", groupIds) } }
+            .decodeList<SettlementEntity>()
+        }
+        Triple(groupsDeferred.await(), allBillsDeferred.await(), allSettlementsDeferred.await())
+      }
+      val groupMap = groups.associate { it.id to it.name }
 
       val billIds = allBills.mapNotNull { it.id }
       val allSplits = if (billIds.isNotEmpty()) {
@@ -46,13 +63,24 @@ class StatsRepository(private val tokenManager: TokenManager) {
           .decodeList<BillSplitEntity>()
       } else emptyList()
 
-      val allSettlements = postgrest["settlements"]
-        .select { filter { isIn("group_id", groupIds) } }
-        .decodeList<SettlementEntity>()
+      // Chỉ lấy hồ sơ của các thành viên có liên quan thay vì tải toàn bộ bảng profiles
+      val involvedUserIds = (
+        allBills.map { it.paidByUserId } +
+        allSplits.map { it.userId } +
+        allSettlements.map { it.fromUserId } +
+        allSettlements.map { it.toUserId } +
+        listOf(userId)
+      ).filter { it.isNotBlank() }.distinct()
 
-      val profiles = postgrest["profiles"]
-        .select()
-        .decodeList<ProfileEntity>()
+      val profiles = if (involvedUserIds.isNotEmpty()) {
+        try {
+          postgrest["profiles"]
+            .select { filter { isIn("id", involvedUserIds) } }
+            .decodeList<ProfileEntity>()
+        } catch (_: Exception) {
+          emptyList()
+        }
+      } else emptyList()
       val profileMap = profiles.associate { it.id to it.username }
 
       var totalSpent = 0.0
@@ -157,19 +185,36 @@ class StatsRepository(private val tokenManager: TokenManager) {
         )
       )
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       Result.failure(e)
     }
   }
 
   suspend fun getGroupStats(groupId: String): Result<GroupStatsResponse> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val userId = auth.currentUserOrNull()?.id
-        ?: TokenManager.getUserIdFromToken(tokenManager.getCachedToken())
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+      if (!sessionValid || userId == null || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
 
-      val bills = postgrest["bills"]
-        .select { filter { eq("group_id", groupId) } }
-        .decodeList<BillEntity>()
+      val (bills, memberRecords) = coroutineScope {
+        val billsDeferred = async {
+          postgrest["bills"]
+            .select { filter { eq("group_id", groupId) } }
+            .decodeList<BillEntity>()
+        }
+        val membersDeferred = async {
+          postgrest["group_members"]
+            .select { filter { eq("group_id", groupId) } }
+            .decodeList<GroupMemberEntity>()
+        }
+        Pair(billsDeferred.await(), membersDeferred.await())
+      }
 
       val billIds = bills.mapNotNull { it.id }
       val splits = if (billIds.isNotEmpty()) {
@@ -178,15 +223,15 @@ class StatsRepository(private val tokenManager: TokenManager) {
           .decodeList<BillSplitEntity>()
       } else emptyList()
 
-      val memberRecords = postgrest["group_members"]
-        .select { filter { eq("group_id", groupId) } }
-        .decodeList<GroupMemberEntity>()
-
       val userIds = memberRecords.map { it.userId }
       val profiles = if (userIds.isNotEmpty()) {
-        postgrest["profiles"]
-          .select { filter { isIn("id", userIds) } }
-          .decodeList<ProfileEntity>()
+        try {
+          postgrest["profiles"]
+            .select { filter { isIn("id", userIds) } }
+            .decodeList<ProfileEntity>()
+        } catch (_: Exception) {
+          emptyList()
+        }
       } else emptyList()
       val profileMap = profiles.associate { it.id to it.username }
 
@@ -246,6 +291,9 @@ class StatsRepository(private val tokenManager: TokenManager) {
         )
       )
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       Result.failure(e)
     }
   }

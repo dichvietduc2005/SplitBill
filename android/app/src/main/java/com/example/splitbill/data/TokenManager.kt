@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 class TokenManager(private val context: Context) {
+  fun getContext(): Context = context
 
   private val encryptedPrefs: SharedPreferences? by lazy {
     try {
@@ -120,11 +121,64 @@ class TokenManager(private val context: Context) {
         null
       }
     }
+
+    fun getUsernameFromToken(token: String?): String? {
+      if (token == null) return null
+      return try {
+        val rawJwt = if (token.trimStart().startsWith("{")) {
+          org.json.JSONObject(token).optString("access_token")
+        } else {
+          token
+        }
+        val parts = rawJwt.split(".")
+        if (parts.size != 3) return null
+        val payload = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE))
+        val json = org.json.JSONObject(payload)
+        val userMetadata = json.optJSONObject("user_metadata")
+        val metaName = userMetadata?.optString("username")?.takeIf { it.isNotBlank() }
+        if (!metaName.isNullOrBlank()) return metaName
+        val email = json.optString("email").takeIf { it.isNotBlank() }
+        email?.substringBefore('@')
+      } catch (e: Exception) {
+        null
+      }
+    }
+
+    fun isTokenExpired(token: String?): Boolean {
+      if (token.isNullOrBlank()) return true
+      return try {
+        val rawJwt = if (token.trimStart().startsWith("{")) {
+          val json = org.json.JSONObject(token)
+          val refreshToken = json.optString("refresh_token")
+          if (refreshToken.isNotBlank()) {
+            return false // Còn refresh_token để làm mới phiên qua Supabase
+          }
+          json.optString("access_token")
+        } else {
+          token
+        }
+        val parts = rawJwt.split(".")
+        if (parts.size != 3) return true
+        val payload = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE))
+        val json = org.json.JSONObject(payload)
+        val exp = json.optLong("exp", 0L)
+        if (exp == 0L) return false
+        (exp * 1000) <= System.currentTimeMillis()
+      } catch (e: Exception) {
+        false
+      }
+    }
   }
 
   fun getToken(): Flow<String?> = _jwtFlow.asStateFlow()
 
   fun getUserId(): String? = getUserIdFromToken(cachedToken ?: encryptedPrefs?.getString(KEY_JWT, null))
+
+  fun hasValidToken(): Boolean {
+    val token = cachedToken ?: encryptedPrefs?.getString(KEY_JWT, null)
+    if (token.isNullOrBlank() || getUserId().isNullOrBlank()) return false
+    return !isTokenExpired(token)
+  }
 
   suspend fun getCachedToken(): String? {
     if (cachedToken != null) return cachedToken

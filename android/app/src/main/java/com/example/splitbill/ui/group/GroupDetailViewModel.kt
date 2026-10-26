@@ -200,6 +200,15 @@ class GroupDetailViewModel(
     }
   }
 
+  fun updateBanner(newBannerUrl: String) {
+    viewModelScope.launch {
+      val updatedGroup = _state.value.group?.copy(bannerUrl = newBannerUrl)
+      _state.value = _state.value.copy(group = updatedGroup)
+      stateCache[groupId] = _state.value
+      groupRepository.updateGroupBanner(groupId, newBannerUrl)
+    }
+  }
+
   fun deleteBill(billId: String) {
     viewModelScope.launch {
       val result = billRepository.deleteBill(billId)

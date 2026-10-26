@@ -2,48 +2,48 @@ package com.example.splitbill.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Premium Fresh Green Palette (Primary)
-val PrimaryLight = Color(0xFF84C236) // Fresh vibrant green
+// Premium Deep Teal Palette (được đồng bộ theo bản thiết kế mới)
+val PrimaryLight = Color(0xFF011C27) // Deep navy/teal primary
 val OnPrimaryLight = Color(0xFFFFFFFF)
-val PrimaryContainerLight = Color(0xFFE2F5D6) // Very light green for hero background
-val OnPrimaryContainerLight = Color(0xFF2D4710)
+val PrimaryContainerLight = Color(0xFF18313D) // Dark slate container
+val OnPrimaryContainerLight = Color(0xFF8099A8)
 
-// Secondary (Subdued Green/Grey-green)
-val SecondaryLight = Color(0xFFA3CD72)
-val OnSecondaryLight = Color(0xFF1D2D0C)
-val SecondaryContainerLight = Color(0xFFF1F8E9)
-val OnSecondaryContainerLight = Color(0xFF33691E)
+// Secondary
+val SecondaryLight = Color(0xFF546068)
+val OnSecondaryLight = Color(0xFFFFFFFF)
+val SecondaryContainerLight = Color(0xFFD5E1EB)
+val OnSecondaryContainerLight = Color(0xFF58646D)
 
-// Tertiary (Orange/Coral for highlights, alerts, badges)
-val TertiaryLight = Color(0xFFF07800) // Extracted from user image character
+// Tertiary
+val TertiaryLight = Color(0xFF131A1D)
 val OnTertiaryLight = Color(0xFFFFFFFF)
-val TertiaryContainerLight = Color(0xFFFFE0B2)
-val OnTertiaryContainerLight = Color(0xFFE65100)
+val TertiaryContainerLight = Color(0xFF282F32)
+val OnTertiaryContainerLight = Color(0xFF8F9799)
 
 // Error Colors
-val ErrorLight = Color(0xFFE53935)
+val ErrorLight = Color(0xFFBA1A1A)
 val OnErrorLight = Color(0xFFFFFFFF)
-val ErrorContainerLight = Color(0xFFFFCDD2)
-val OnErrorContainerLight = Color(0xFFB71C1C)
+val ErrorContainerLight = Color(0xFFFFDAD6)
+val OnErrorContainerLight = Color(0xFF93000A)
 
 // Background & Surface
-val BackgroundLight = Color(0xFFE2E6DC) // Darker organic background (90% lightness) for distinct card contrast
-val OnBackgroundLight = Color(0xFF1E1E1E) // Near black text
-val SurfaceLight = Color(0xFFFFFFFF) // Pure white cards
-val OnSurfaceLight = Color(0xFF1E1E1E)
+val BackgroundLight = Color(0xFFF9F9F6) // Warm off-white surface
+val OnBackgroundLight = Color(0xFF1A1C1B)
+val SurfaceLight = Color(0xFFF9F9F6)
+val OnSurfaceLight = Color(0xFF1A1C1B)
 
 // Surface Container Variants (M3)
 val SurfaceContainerLowestLight = Color(0xFFFFFFFF)
-val SurfaceContainerLowLight = Color(0xFFF8F9FA)
-val SurfaceContainerLight = Color(0xFFF3F4F6) // Very light gray for nested elements
-val SurfaceContainerHighLight = Color(0xFFE5E7EB)
-val SurfaceContainerHighestLight = Color(0xFFD1D5DB)
+val SurfaceContainerLowLight = Color(0xFFF4F4F1)
+val SurfaceContainerLight = Color(0xFFEEEEEB)
+val SurfaceContainerHighLight = Color(0xFFE8E8E5)
+val SurfaceContainerHighestLight = Color(0xFFE2E3E0)
 
 // Surface Variants & Outlines
-val SurfaceVariantLight = Color(0xFFF3F4F6)
-val OnSurfaceVariantLight = Color(0xFF4B5563) // Gray text for subtitles
-val OutlineLight = Color(0xFF9CA3AF)
-val OutlineVariantLight = Color(0xFFE5E7EB)
+val SurfaceVariantLight = Color(0xFFE2E3E0)
+val OnSurfaceVariantLight = Color(0xFF42474B)
+val OutlineLight = Color(0xFF73787B)
+val OutlineVariantLight = Color(0xFFC2C7CB)
 
 // ----------------------------------------------------
 // DARK MODE PALETTE
@@ -87,9 +87,9 @@ val OutlineDark = Color(0xFF757575)
 val OutlineVariantDark = Color(0xFF424242)
 
 // Custom specific semantics
-val PositiveAmount = Color(0xFF84C236) // Fresh Green for getting money back
-val NegativeAmount = Color(0xFFE53935) // Red for owing money
-val PositiveAmountDark = Color(0xFF84C236) 
+val PositiveAmount = Color(0xFF239B75) // Emerald green for getting money back
+val NegativeAmount = Color(0xFFBA1A1A) // Crimson red for owing money
+val PositiveAmountDark = Color(0xFF34D399) 
 val NegativeAmountDark = Color(0xFFEF5350)
 
 // ----------------------------------------------------
