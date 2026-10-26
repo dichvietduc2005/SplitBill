@@ -11,11 +11,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +32,9 @@ import com.example.splitbill.theme.Dimens
 import com.example.splitbill.ui.localization.localized
 
 enum class HomeTab {
+  Home,
   Groups,
+  Debts,
   Profile,
   Settings
 }
@@ -42,118 +43,156 @@ enum class HomeTab {
 fun FloatingBottomBar(
   selectedTab: HomeTab,
   onTabSelected: (HomeTab) -> Unit,
+  onAddClick: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   val haptic = LocalHapticFeedback.current
-  val tabs = listOf(
-    TabItem(HomeTab.Groups, "Nhóm".localized(), Icons.Rounded.Groups),
-    TabItem(HomeTab.Profile, "Cá nhân".localized(), Icons.Rounded.Person),
-    TabItem(HomeTab.Settings, "Cài đặt".localized(), Icons.Rounded.Settings)
-  )
 
+  // Sử dụng Box bao quanh ngoài cùng với chiều cao đủ để chứa nút tròn nhô lên trên mà không bị cắt
   Box(
     modifier = modifier
-      .windowInsetsPadding(WindowInsets.navigationBars) // Tương thích với thanh điều hướng hệ thống (phím ảo hoặc vuốt cử chỉ)
-      .padding(horizontal = 24.dp)
-      .padding(bottom = 16.dp)
-      .shadow(
-        elevation = 16.dp, // Premium soft shadow
-        shape = RoundedCornerShape(24.dp),
-        spotColor = Color.Black.copy(alpha = 0.15f),
-        ambientColor = Color.Black.copy(alpha = 0.05f)
-      )
-      .clip(RoundedCornerShape(24.dp))
-      .background(MaterialTheme.colorScheme.surface)
-      .height(64.dp)
       .fillMaxWidth()
+      .wrapContentHeight(),
+    contentAlignment = Alignment.BottomCenter
   ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-      val tabWidth = maxWidth / tabs.size
-      
-      // Sliding active pill indicator
-      val animatedOffset by animateDpAsState(
-        targetValue = when (selectedTab) {
-          HomeTab.Groups -> 0.dp
-          HomeTab.Profile -> tabWidth
-          HomeTab.Settings -> tabWidth * 2
-        },
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-        label = "pill_offset"
-      )
-
+    // 1. Thanh nền Navigation Bar bên dưới
+    Surface(
+      color = Color(0xFFF9F9F6).copy(alpha = 0.96f),
+      shadowElevation = 8.dp,
+      modifier = Modifier
+        .fillMaxWidth()
+        .align(Alignment.BottomCenter)
+    ) {
       Box(
         modifier = Modifier
-          .offset(x = animatedOffset)
-          .width(tabWidth)
-          .fillMaxHeight()
-          .padding(horizontal = 8.dp, vertical = 8.dp)
-          .background(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(18.dp)
-          )
-      )
-
-      // Tab items
-      Row(
-        modifier = Modifier.fillMaxSize(),
-        verticalAlignment = Alignment.CenterVertically
+          .fillMaxWidth()
+          .windowInsetsPadding(WindowInsets.navigationBars)
+          .height(64.dp)
+          .padding(horizontal = 12.dp)
       ) {
-        tabs.forEach { tab ->
-          val isSelected = tab.type == selectedTab
-          val contentColor by animateColorAsState(
-            targetValue = if (isSelected) {
-              MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-              MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            },
-            animationSpec = tween(180),
-            label = "tab_color"
+        Row(
+          modifier = Modifier.fillMaxSize(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceAround
+        ) {
+          // Tab 1: Trang chủ
+          BottomNavButton(
+            title = "Trang chủ",
+            icon = Icons.Rounded.Home,
+            isSelected = selectedTab == HomeTab.Home,
+            onClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onTabSelected(HomeTab.Home)
+            }
           )
 
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .fillMaxHeight()
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null // Disabling default ripple since we have the sliding pill
-              ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onTabSelected(tab.type)
-              },
-            contentAlignment = Alignment.Center
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center,
-              modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-              Icon(
-                imageVector = tab.icon,
-                contentDescription = tab.label,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp)
-              )
-              if (isSelected) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = tab.label,
-                  color = contentColor,
-                  fontSize = 13.sp,
-                  fontWeight = FontWeight.Bold,
-                  maxLines = 1
-                )
-              }
+          // Tab 2: Nhóm
+          BottomNavButton(
+            title = "Nhóm",
+            icon = Icons.Rounded.Group,
+            isSelected = selectedTab == HomeTab.Groups,
+            onClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onTabSelected(HomeTab.Groups)
             }
-          }
+          )
+
+          // Chỗ trống chính giữa để nhường chỗ cho nút tròn nổi
+          Spacer(modifier = Modifier.width(56.dp))
+
+          // Tab 4: Công nợ
+          BottomNavButton(
+            title = "Công nợ",
+            icon = Icons.Rounded.AccountBalanceWallet,
+            isSelected = selectedTab == HomeTab.Debts,
+            onClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onTabSelected(HomeTab.Debts)
+            }
+          )
+
+          // Tab 5: Cá nhân
+          BottomNavButton(
+            title = "Cá nhân",
+            icon = Icons.Rounded.Person,
+            isSelected = selectedTab == HomeTab.Profile,
+            onClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onTabSelected(HomeTab.Profile)
+            }
+          )
         }
+      }
+    }
+
+    // 2. Nút (+) tròn nổi độc lập (đè lên phía trên thanh điều hướng, không bị cắt)
+    Box(
+      modifier = Modifier
+        .align(Alignment.BottomCenter)
+        .windowInsetsPadding(WindowInsets.navigationBars)
+        .padding(bottom = 32.dp) // Nhô cao 32dp đè lên thanh 64dp
+    ) {
+      Box(
+        modifier = Modifier
+          .size(54.dp)
+          .shadow(
+            elevation = 12.dp,
+            shape = CircleShape,
+            spotColor = Color(0xFF011C27).copy(alpha = 0.45f)
+          )
+          .clip(CircleShape)
+          .background(Color(0xFF011C27))
+          .clickable {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onAddClick()
+          },
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Rounded.Add,
+          contentDescription = "Thêm khoản chi mới",
+          tint = Color(0xFFFFFFFF),
+          modifier = Modifier.size(28.dp)
+        )
       }
     }
   }
 }
 
-private data class TabItem(
-  val type: HomeTab,
-  val label: String,
-  val icon: ImageVector
-)
+@Composable
+private fun BottomNavButton(
+  title: String,
+  icon: ImageVector,
+  isSelected: Boolean,
+  onClick: () -> Unit
+) {
+  val color = if (isSelected) Color(0xFF011C27) else Color(0xFF546068).copy(alpha = 0.75f)
+
+  Column(
+    modifier = Modifier
+      .width(56.dp)
+      .fillMaxHeight()
+      .clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick
+      ),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center
+  ) {
+    Icon(
+      imageVector = icon,
+      contentDescription = title,
+      tint = color,
+      modifier = Modifier.size(24.dp)
+    )
+    Spacer(modifier = Modifier.height(3.dp))
+    Text(
+      text = title,
+      fontSize = 11.sp,
+      fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+      color = color,
+      maxLines = 1
+    )
+  }
+}

@@ -29,7 +29,8 @@ data class GroupResponse(
   val createdBy: String,
   val createdByName: String,
   val memberCount: Int,
-  val createdAt: String
+  val createdAt: String,
+  val bannerUrl: String? = null
 )
 
 @Serializable
