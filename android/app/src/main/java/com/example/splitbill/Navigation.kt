@@ -57,12 +57,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 
 @Serializable data object Onboarding : NavKey
 @Serializable data object Login : NavKey
-@Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Groups) : NavKey
+@Serializable data class HomeTabs(val initialTab: HomeTab = HomeTab.Home) : NavKey
 @Serializable data class GroupDetail(val groupId: String, val initialBillId: String? = null) : NavKey
 @Serializable data class AddBill(
   val groupId: String, 
@@ -82,10 +85,47 @@ fun MainNavigation(
   settingsManager: SettingsManager,
   navIntentFlow: kotlinx.coroutines.flow.StateFlow<android.content.Intent?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 ) {
-  val backStack = rememberNavBackStack(Login)
   val context = LocalContext.current
-  val tokenManager = TokenManager(context)
+  val tokenManager = remember { TokenManager(context) }
+  val initialKey = remember {
+    if (tokenManager.hasValidToken()) {
+      HomeTabs(HomeTab.Home)
+    } else {
+      Login
+    }
+  }
+  val backStack = rememberNavBackStack(initialKey)
   val onboardingCompleted by settingsManager.onboardingCompleted.collectAsState(initial = true)
+
+  // Tự động đẩy ra màn hình Login ngay khi token bị xóa hoặc phiên hết hạn
+  val currentToken by tokenManager.getToken().collectAsState(initial = "init")
+  LaunchedEffect(currentToken) {
+    if ((currentToken == null || !tokenManager.hasValidToken()) && backStack.none { it is Login || it is Onboarding }) {
+      backStack.clear()
+      backStack.add(Login)
+    }
+  }
+
+  // Xác thực tính hợp lệ của phiên đăng nhập với Supabase khi khởi chạy ứng dụng
+  LaunchedEffect(Unit) {
+    val cachedToken = tokenManager.getCachedToken()
+    if (cachedToken.isNullOrBlank() || !tokenManager.hasValidToken()) {
+      tokenManager.deleteToken()
+      if (backStack.none { it is Login || it is Onboarding }) {
+        backStack.clear()
+        backStack.add(Login)
+      }
+    } else {
+      val sessionValid = com.example.splitbill.data.supabase.SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      if (!sessionValid) {
+        tokenManager.deleteToken()
+        if (backStack.none { it is Login || it is Onboarding }) {
+          backStack.clear()
+          backStack.add(Login)
+        }
+      }
+    }
+  }
 
   LaunchedEffect(onboardingCompleted) {
     if (!onboardingCompleted && backStack.lastOrNull() == Login) {
@@ -117,7 +157,7 @@ fun MainNavigation(
         if (current !is GroupDetail || current.groupId != targetGroupId || current.initialBillId != billId) {
           if (backStack.none { it is HomeTabs }) {
             backStack.clear()
-            backStack.add(HomeTabs(HomeTab.Groups))
+            backStack.add(HomeTabs(HomeTab.Home))
           }
           backStack.add(GroupDetail(groupId = targetGroupId, initialBillId = billId))
         }
@@ -228,8 +268,8 @@ fun MainNavigation(
         LoginScreen(
           viewModel = viewModel,
           onLoginSuccess = {
-            backStack.removeLastOrNull()
-            backStack.add(HomeTabs(HomeTab.Groups))
+            backStack.clear()
+            backStack.add(HomeTabs(HomeTab.Home))
           }
         )
       }
@@ -244,6 +284,16 @@ fun MainNavigation(
           },
           onNavigateToProfile = {
             backStack.add(Profile)
+          },
+          onNavigateToAddBill = { groupId, members ->
+            backStack.add(
+              AddBill(
+                groupId = groupId,
+                memberIds = members.map { it.userId },
+                memberNames = members.map { it.username },
+                memberEmails = members.map { it.email }
+              )
+            )
           },
           onLogoutSuccess = {
             backStack.clear()
@@ -404,21 +454,79 @@ fun HomeTabsScreen(
   tokenManager: TokenManager,
   onNavigateToGroup: (String) -> Unit,
   onNavigateToProfile: () -> Unit,
+  onNavigateToAddBill: (groupId: String, members: List<MemberResponse>) -> Unit,
   onLogoutSuccess: () -> Unit
 ) {
   var currentTab by remember { mutableStateOf(initialTab) }
+  val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
 
-  // Xử lý nút Back hệ thống: Nếu ở Tab Profile/Settings thì quay về Tab Groups trước khi thoát
-  androidx.activity.compose.BackHandler(enabled = currentTab != HomeTab.Groups) {
-    currentTab = HomeTab.Groups
+  // Xử lý nút Back hệ thống: Nếu ở Tab khác thì quay về Tab Home trước khi thoát
+  androidx.activity.compose.BackHandler(enabled = currentTab != HomeTab.Home) {
+    currentTab = HomeTab.Home
+  }
+
+  val database = remember { com.example.splitbill.data.local.AppDatabase.getDatabase(context) }
+  val groupRepository = remember { GroupRepository(tokenManager, database.groupDao()) }
+  val billRepository = remember { BillRepository(tokenManager, database.billDao(), database.pendingSyncDao()) }
+  val profileRepository = remember { ProfileRepository(tokenManager) }
+  val statsRepository = remember { StatsRepository(tokenManager) }
+  val inviteRepository = remember { InviteRepository(tokenManager) }
+
+  // State dialog chọn nhóm khi bấm FAB tạo khoản chi mới từ HomeTab
+  var showSelectGroupDialog by remember { mutableStateOf(false) }
+  var availableGroups by remember { mutableStateOf<List<com.example.splitbill.data.api.GroupResponse>>(emptyList()) }
+
+  val openAddExpense = {
+    coroutineScope.launch {
+      val groups = groupRepository.getGroups().getOrDefault(emptyList())
+      if (groups.isNotEmpty()) {
+        availableGroups = groups
+        showSelectGroupDialog = true
+      } else {
+        currentTab = HomeTab.Groups
+      }
+    }
+  }
+
+  if (showSelectGroupDialog) {
+    AlertDialog(
+      onDismissRequest = { showSelectGroupDialog = false },
+      title = { Text("Chọn nhóm để tạo khoản chi", style = MaterialTheme.typography.titleMedium) },
+      text = {
+        androidx.compose.foundation.lazy.LazyColumn {
+          items(availableGroups.size) { index ->
+            val grp = availableGroups[index]
+            androidx.compose.material3.ListItem(
+              headlineContent = { Text(grp.name, fontWeight = FontWeight.SemiBold) },
+              supportingContent = { Text("${grp.memberCount} thành viên") },
+              modifier = Modifier.clickable {
+                showSelectGroupDialog = false
+                coroutineScope.launch {
+                  val members = groupRepository.getMembers(grp.id).getOrDefault(emptyList())
+                  onNavigateToAddBill(grp.id, members)
+                }
+              }
+            )
+          }
+        }
+      },
+      confirmButton = {},
+      dismissButton = {
+        Button(onClick = { showSelectGroupDialog = false }) {
+          Text("Đóng")
+        }
+      }
+    )
   }
 
   Scaffold(
-    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+    containerColor = Color(0xFFF9F9F6),
     bottomBar = {
       FloatingBottomBar(
         selectedTab = currentTab,
-        onTabSelected = { currentTab = it }
+        onTabSelected = { currentTab = it },
+        onAddClick = { openAddExpense() }
       )
     },
     modifier = Modifier.fillMaxSize()
@@ -429,43 +537,67 @@ fun HomeTabsScreen(
       label = "tab_transition",
       modifier = Modifier
         .fillMaxSize()
-        .padding(bottom = paddingValues.calculateBottomPadding() - 16.dp)
+        .padding(bottom = paddingValues.calculateBottomPadding())
     ) { tab ->
       when (tab) {
-        HomeTab.Groups -> {
-          val database = com.example.splitbill.data.local.AppDatabase.getDatabase(LocalContext.current)
-          val groupRepository = GroupRepository(tokenManager, database.groupDao())
-          val inviteRepository = InviteRepository(tokenManager)
-          val statsRepository = StatsRepository(tokenManager)
-          val viewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
-          GroupListScreen(
-            viewModel = viewModel,
+        HomeTab.Home -> {
+          val homeViewModel = viewModel {
+            com.example.splitbill.ui.home.HomeScreenViewModel(
+              groupRepository = groupRepository,
+              billRepository = billRepository,
+              profileRepository = profileRepository,
+              statsRepository = statsRepository,
+              tokenManager = tokenManager
+            )
+          }
+          com.example.splitbill.ui.home.HomeScreen(
+            viewModel = homeViewModel,
             onNavigateToGroup = onNavigateToGroup,
-            onNavigateToSettings = {},
+            onNavigateToProfile = onNavigateToProfile,
+            onNavigateToGroupsTab = { currentTab = HomeTab.Groups },
+            onNavigateToDebtsTab = { currentTab = HomeTab.Debts },
+            onCreateExpenseClick = { openAddExpense() },
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+        HomeTab.Groups -> {
+          val groupViewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
+          GroupListScreen(
+            viewModel = groupViewModel,
+            onNavigateToGroup = onNavigateToGroup,
+            onNavigateToSettings = { currentTab = HomeTab.Settings },
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+        HomeTab.Debts -> {
+          // Khi ở tab Công nợ, ta hiển thị danh sách nhóm để chọn xem tổng kết nợ hoặc xem nhóm đầu tiên
+          val groupViewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
+          GroupListScreen(
+            viewModel = groupViewModel,
+            onNavigateToGroup = onNavigateToGroup,
+            onNavigateToSettings = { currentTab = HomeTab.Settings },
             modifier = Modifier.fillMaxSize()
           )
         }
         HomeTab.Profile -> {
-          val profileRepository = ProfileRepository(tokenManager)
-          val viewModel = viewModel { ProfileViewModel(profileRepository) }
+          val profViewModel = viewModel { ProfileViewModel(profileRepository) }
           ProfileScreen(
-            viewModel = viewModel,
-            onNavigateBack = {},
+            viewModel = profViewModel,
+            onNavigateBack = { currentTab = HomeTab.Home },
             isTab = true,
             modifier = Modifier.fillMaxSize()
           )
         }
         HomeTab.Settings -> {
           val authRepository = AuthRepository(tokenManager)
-          val profileRepository = ProfileRepository(tokenManager)
-          val viewModel = viewModel {
+          val settingsViewModel = viewModel {
             SettingsViewModel(settingsManager, authRepository, profileRepository)
           }
           SettingsScreen(
-            viewModel = viewModel,
+            viewModel = settingsViewModel,
             onNavigateToProfile = onNavigateToProfile,
             onLogoutSuccess = onLogoutSuccess,
-            onNavigateBack = {},
+            onNavigateBack = { currentTab = HomeTab.Home },
             isTab = true,
             modifier = Modifier.fillMaxSize()
           )
