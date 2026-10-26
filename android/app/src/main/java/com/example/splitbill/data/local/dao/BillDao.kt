@@ -13,6 +13,12 @@ interface BillDao {
   @Query("SELECT * FROM bills_cache WHERE groupId = :groupId ORDER BY createdAt DESC")
   suspend fun getBillsForGroup(groupId: String): List<BillEntityLocal>
 
+  @Query("SELECT * FROM bills_cache ORDER BY createdAt DESC LIMIT :limit")
+  fun observeRecentBills(limit: Int = 10): Flow<List<BillEntityLocal>>
+
+  @Query("SELECT * FROM bills_cache ORDER BY createdAt DESC LIMIT :limit")
+  suspend fun getRecentBills(limit: Int = 10): List<BillEntityLocal>
+
   @Query("SELECT * FROM bill_splits_cache WHERE billId IN (:billIds)")
   suspend fun getSplitsForBills(billIds: List<String>): List<BillSplitEntityLocal>
 

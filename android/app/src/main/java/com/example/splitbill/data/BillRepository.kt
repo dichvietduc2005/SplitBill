@@ -60,6 +60,13 @@ class BillRepository(
 
   suspend fun getBillsForGroup(groupId: String): Result<List<BillResponse>> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val currentUserId = auth.currentUserOrNull()?.id
+      if (currentUserId == null || auth.currentSessionOrNull() == null) {
+        throw Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn")
+      }
+
       val bills = postgrest["bills"]
         .select { filter { eq("group_id", groupId) } }
         .decodeList<BillEntity>()
@@ -73,9 +80,16 @@ class BillRepository(
         .select { filter { isIn("bill_id", billIds) } }
         .decodeList<BillSplitEntity>()
 
-      val profiles = postgrest["profiles"]
-        .select()
-        .decodeList<ProfileEntity>()
+      val involvedUserIds = (bills.map { it.paidByUserId } + splits.map { it.userId }).filter { it.isNotBlank() }.distinct()
+      val profiles = if (involvedUserIds.isNotEmpty()) {
+        try {
+          postgrest["profiles"]
+            .select { filter { isIn("id", involvedUserIds) } }
+            .decodeList<ProfileEntity>()
+        } catch (_: Exception) {
+          emptyList()
+        }
+      } else emptyList()
       val profileMap = profiles.associateBy { it.id }
 
       val splitsByBillId = splits.groupBy { it.billId }
@@ -142,10 +156,174 @@ class BillRepository(
 
       Result.success(response)
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       // Fallback offline từ Room cache với đầy đủ thông tin chuẩn xác
       if (billDao != null) {
         try {
           val cachedBills = billDao.getBillsForGroup(groupId)
+          if (cachedBills.isNotEmpty()) {
+            val billIds = cachedBills.map { it.id }
+            val cachedSplits = billDao.getSplitsForBills(billIds).groupBy { it.billId }
+            val cachedResponse = cachedBills.map { b ->
+              val splits = cachedSplits[b.id]?.map { s ->
+                BillSplitResponse(
+                  userId = s.userId,
+                  username = s.username,
+                  amountOwed = s.amountOwed
+                )
+              } ?: emptyList()
+              BillResponse(
+                id = b.id,
+                groupId = b.groupId,
+                description = b.title,
+                totalAmount = b.totalAmount,
+                paidByUserId = b.paidBy,
+                paidByUsername = b.paidByUsername,
+                currency = b.currency,
+                exchangeRate = b.exchangeRate,
+                category = b.category ?: "OTHER",
+                receiptUrl = b.receiptImageUrl,
+                isPaid = b.isPaid,
+                splits = splits,
+                createdAt = b.createdAt ?: ""
+              )
+            }
+            return Result.success(cachedResponse)
+          }
+        } catch (_: Exception) {}
+      }
+      Result.failure(e)
+    }
+  }
+
+  /**
+   * Lấy danh sách giao dịch gần nhất của người dùng trên tất cả các nhóm mà họ tham gia
+   */
+  suspend fun getRecentBills(limit: Int = 5): Result<List<BillResponse>> {
+    return try {
+      val cachedToken = tokenManager.getCachedToken()
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val currentUserId = auth.currentUserOrNull()?.id 
+      if (!sessionValid || currentUserId == null || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
+
+      // Lấy danh sách nhóm của user
+      val memberRecords = postgrest["group_members"]
+        .select { filter { eq("user_id", currentUserId) } }
+        .decodeList<GroupMemberEntity>()
+      
+      val groupIds = memberRecords.map { it.groupId }
+      if (groupIds.isEmpty()) {
+        return Result.success(emptyList())
+      }
+
+      // Lấy các hóa đơn mới nhất từ các nhóm này
+      val bills = postgrest["bills"]
+        .select { 
+          filter { isIn("group_id", groupIds) }
+          order(column = "created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+          limit(limit.toLong())
+        }
+        .decodeList<BillEntity>()
+
+      if (bills.isEmpty()) {
+        return Result.success(emptyList())
+      }
+
+      val billIds = bills.mapNotNull { it.id }
+      val splits = postgrest["bill_splits"]
+        .select { filter { isIn("bill_id", billIds) } }
+        .decodeList<BillSplitEntity>()
+
+      val involvedUserIds = (bills.map { it.paidByUserId } + splits.map { it.userId }).filter { it.isNotBlank() }.distinct()
+      val profiles = if (involvedUserIds.isNotEmpty()) {
+        try {
+          postgrest["profiles"]
+            .select { filter { isIn("id", involvedUserIds) } }
+            .decodeList<ProfileEntity>()
+        } catch (_: Exception) {
+          emptyList()
+        }
+      } else emptyList()
+      val profileMap = profiles.associateBy { it.id }
+      val splitsByBillId = splits.groupBy { it.billId }
+
+      val response = bills.map { b ->
+        val billSplits = splitsByBillId[b.id] ?: emptyList()
+        val splitResponses = billSplits.map { s ->
+          BillSplitResponse(
+            userId = s.userId,
+            username = profileMap[s.userId]?.username ?: "User",
+            amountOwed = s.amountOwed
+          )
+        }
+
+        BillResponse(
+          id = b.id ?: "",
+          groupId = b.groupId,
+          description = b.description,
+          totalAmount = b.totalAmount,
+          paidByUserId = b.paidByUserId,
+          paidByUsername = profileMap[b.paidByUserId]?.username ?: "User",
+          currency = b.currency,
+          exchangeRate = b.exchangeRate,
+          category = b.category,
+          receiptUrl = b.receiptUrl,
+          isPaid = b.isPaid,
+          splits = splitResponses,
+          createdAt = b.createdAt ?: ""
+        )
+      }
+
+      // Cache xuống Room database để khởi động tức thì
+      billDao?.let { dao ->
+        val localBills = bills.map { b ->
+          com.example.splitbill.data.local.entity.BillEntityLocal(
+            id = b.id ?: "",
+            groupId = b.groupId,
+            paidBy = b.paidByUserId,
+            paidByUsername = profileMap[b.paidByUserId]?.username ?: "Thành viên",
+            title = b.description,
+            description = b.description,
+            totalAmount = b.totalAmount,
+            currency = b.currency,
+            exchangeRate = b.exchangeRate,
+            category = b.category,
+            receiptImageUrl = b.receiptUrl,
+            isPaid = false,
+            splitType = "EQUAL",
+            createdAt = b.createdAt,
+            isPendingSync = false
+          )
+        }
+        val localSplits = splits.map { s ->
+          com.example.splitbill.data.local.entity.BillSplitEntityLocal(
+            billId = s.billId,
+            userId = s.userId,
+            username = profileMap[s.userId]?.username ?: "Thành viên",
+            amountOwed = s.amountOwed,
+            isSettled = false
+          )
+        }
+        dao.insertBills(localBills)
+        if (localSplits.isNotEmpty()) {
+          dao.insertSplits(localSplits)
+        }
+      }
+
+      Result.success(response)
+    } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
+      // Fallback cache từ Room
+      if (billDao != null) {
+        try {
+          val cachedBills = billDao.getRecentBills(limit)
           if (cachedBills.isNotEmpty()) {
             val billIds = cachedBills.map { it.id }
             val cachedSplits = billDao.getSplitsForBills(billIds).groupBy { it.billId }
