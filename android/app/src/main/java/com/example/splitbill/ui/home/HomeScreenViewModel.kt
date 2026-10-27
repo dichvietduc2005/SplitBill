@@ -59,9 +59,49 @@ class HomeScreenViewModel(
 
   init {
     loadHomeData()
+    // Lắng nghe cập nhật ảnh bìa từ GroupDetailScreen để cập nhật tức thì trên Home không độ trễ
+    viewModelScope.launch {
+      groupRepository.bannerUpdateFlow.collect { (groupId, newBannerUrl) ->
+        updateGroupBannerInMemory(groupId, newBannerUrl)
+      }
+    }
+  }
+
+  fun updateGroupBannerInMemory(groupId: String, newBannerUrl: String) {
+    val current = _uiState.value
+    val target = (current as? HomeUiState.Success) ?: cachedState
+    if (target != null) {
+      val updatedRecent = target.recentGroups.map { item ->
+        if (item.group.id == groupId) {
+          item.copy(
+            bannerUrl = newBannerUrl,
+            group = item.group.copy(bannerUrl = newBannerUrl)
+          )
+        } else item
+      }
+      val newState = target.copy(recentGroups = updatedRecent)
+      _uiState.value = newState
+      cachedState = newState
+    }
   }
 
   fun loadHomeData(onComplete: (() -> Unit)? = null) {
+    // Ngay khi loadHomeData được gọi (vd: ON_RESUME quay lại từ GroupDetail), đồng bộ ảnh bìa mới nhất từ SharedPreferences ngay lập tức
+    val target = (_uiState.value as? HomeUiState.Success) ?: cachedState
+    if (target != null) {
+      val syncedRecent = target.recentGroups.map { item ->
+        val localBanner = groupRepository.getLocalGroupBanner(item.group.id)
+        if (localBanner != null && localBanner != item.bannerUrl) {
+          item.copy(bannerUrl = localBanner, group = item.group.copy(bannerUrl = localBanner))
+        } else item
+      }
+      if (syncedRecent != target.recentGroups) {
+        val newState = target.copy(recentGroups = syncedRecent)
+        _uiState.value = newState
+        cachedState = newState
+      }
+    }
+
     if (_uiState.value !is HomeUiState.Success && cachedState == null) {
       _uiState.value = HomeUiState.Loading
     }
@@ -101,17 +141,19 @@ class HomeScreenViewModel(
           return@launch
         }
 
-        val profile = profileResult.getOrNull()
-        val groups = groupsResult.getOrDefault(emptyList())
-        val stats = statsResult.getOrNull()
-        val recentBills = recentBillsResult.getOrDefault(emptyList())
+        val lastSuccess = cachedState as? HomeUiState.Success
+        val profile = profileResult.getOrNull() ?: lastSuccess?.userProfile
+        val groups = groupsResult.getOrNull() ?: lastSuccess?.recentGroups?.map { it.group } ?: emptyList()
+        val stats = statsResult.getOrNull() ?: com.example.splitbill.data.StatsRepository.getCachedStats()
+        val recentBills = recentBillsResult.getOrNull() ?: lastSuccess?.recentBills ?: emptyList()
 
         // Map nhóm trực tiếp (không gọi getMembers tuần tự lặp lại gây nghẽn skeleton)
         val recentGroupsWithMembers = groups.take(6).map { group ->
+          val effectiveBanner = groupRepository.getLocalGroupBanner(group.id) ?: group.bannerUrl
           HomeGroupItem(
-            group = group,
+            group = group.copy(bannerUrl = effectiveBanner),
             members = emptyList(),
-            bannerUrl = group.bannerUrl
+            bannerUrl = effectiveBanner
           )
         }
 
@@ -136,8 +178,8 @@ class HomeScreenViewModel(
 
         val successState = HomeUiState.Success(
           userProfile = effectiveProfile,
-          totalToReceive = stats?.totalOthersOweToMe ?: 0.0,
-          totalToPay = stats?.totalOwedToOthers ?: 0.0,
+          totalToReceive = stats?.totalOthersOweToMe ?: lastSuccess?.totalToReceive ?: 0.0,
+          totalToPay = stats?.totalOwedToOthers ?: lastSuccess?.totalToPay ?: 0.0,
           countToReceive = if (countToReceive > 0) countToReceive else if ((stats?.totalOthersOweToMe ?: 0.0) > 0) 1 else 0,
           countToPay = if (countToPay > 0) countToPay else if ((stats?.totalOwedToOthers ?: 0.0) > 0) 1 else 0,
           recentGroups = recentGroupsWithMembers,

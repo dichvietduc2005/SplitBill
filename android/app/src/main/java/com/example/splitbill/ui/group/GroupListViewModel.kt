@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.splitbill.data.GroupRepository
 import com.example.splitbill.data.InviteRepository
 import com.example.splitbill.data.api.GroupResponse
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +19,8 @@ sealed interface GroupListUiState {
     val actionMessage: String? = null,
     val totalToReceive: Double = 0.0,
     val totalToPay: Double = 0.0,
-    val groupSpentMap: Map<String, Double> = emptyMap()
+    val groupSpentMap: Map<String, Double> = emptyMap(),
+    val groupBalanceMap: Map<String, Double> = emptyMap()
   ) : GroupListUiState
   data class Error(val message: String) : GroupListUiState
 }
@@ -29,7 +32,7 @@ class GroupListViewModel(
 ) : ViewModel() {
 
   companion object {
-    private var cachedState: GroupListUiState? = null
+    private var cachedState: GroupListUiState.Success? = null
     fun clearCache() {
       cachedState = null
     }
@@ -40,6 +43,8 @@ class GroupListViewModel(
   )
   val uiState: StateFlow<GroupListUiState> = _uiState.asStateFlow()
 
+  private var activeLoadJob: Job? = null
+
   init {
     loadGroups()
 
@@ -48,49 +53,129 @@ class GroupListViewModel(
       groupRepository.observeGroups()?.collect { cachedGroups ->
         if (cachedGroups.isNotEmpty()) {
           val current = _uiState.value
-          if (current is GroupListUiState.Success) {
-            _uiState.value = current.copy(groups = cachedGroups)
-          } else {
-            _uiState.value = GroupListUiState.Success(groups = cachedGroups)
-          }
+          val lastSuccess = (current as? GroupListUiState.Success) ?: cachedState
+          val updated = GroupListUiState.Success(
+            groups = cachedGroups,
+            actionMessage = lastSuccess?.actionMessage,
+            totalToReceive = lastSuccess?.totalToReceive ?: 0.0,
+            totalToPay = lastSuccess?.totalToPay ?: 0.0,
+            groupSpentMap = lastSuccess?.groupSpentMap ?: emptyMap(),
+            groupBalanceMap = lastSuccess?.groupBalanceMap ?: emptyMap()
+          )
+          _uiState.value = updated
+          cachedState = updated
         }
+      }
+    }
+
+    // Lắng nghe cập nhật ảnh bìa từ GroupDetailScreen để đổi tức thì trên GroupListScreen
+    viewModelScope.launch {
+      groupRepository.bannerUpdateFlow.collect { (groupId, newBannerUrl) ->
+        updateGroupBannerInMemory(groupId, newBannerUrl)
       }
     }
   }
 
+  fun updateGroupBannerInMemory(groupId: String, newBannerUrl: String) {
+    val current = _uiState.value
+    val target = (current as? GroupListUiState.Success) ?: cachedState
+    if (target != null) {
+      val updatedGroups = target.groups.map { group ->
+        if (group.id == groupId) {
+          group.copy(bannerUrl = newBannerUrl)
+        } else group
+      }
+      val newState = target.copy(groups = updatedGroups)
+      _uiState.value = newState
+      cachedState = newState
+    }
+  }
+
   fun loadGroups(onComplete: (() -> Unit)? = null) {
-    // Only show loading skeleton on initial fetch to avoid jarring flashes
-    if (_uiState.value !is GroupListUiState.Success) {
+    // Ngay khi loadGroups được gọi, đồng bộ ảnh bìa mới nhất từ SharedPreferences ngay lập tức
+    val target = (_uiState.value as? GroupListUiState.Success) ?: cachedState
+    if (target != null) {
+      val syncedGroups = target.groups.map { group ->
+        val localBanner = groupRepository.getLocalGroupBanner(group.id)
+        if (localBanner != null && localBanner != group.bannerUrl) {
+          group.copy(bannerUrl = localBanner)
+        } else group
+      }
+      if (syncedGroups != target.groups) {
+        val newState = target.copy(groups = syncedGroups)
+        _uiState.value = newState
+        cachedState = newState
+      }
+    }
+
+    // Nếu đang có tác vụ tải đang chạy, tránh gọi mạng trùng lặp đồng thời
+    if (activeLoadJob?.isActive == true) {
+      onComplete?.invoke()
+      return
+    }
+
+    // Chỉ hiện skeleton lần đầu nếu chưa hề có dữ liệu nhóm nào
+    if (_uiState.value !is GroupListUiState.Success && cachedState == null) {
       _uiState.value = GroupListUiState.Loading
     }
-    viewModelScope.launch {
-      try {
-        val result = groupRepository.getGroups()
-        if (result.isSuccess) {
-          val groups = result.getOrDefault(emptyList())
-          val initialSuccess = GroupListUiState.Success(groups = groups)
-          _uiState.value = initialSuccess
-          cachedState = initialSuccess
 
-          // Tải số dư thống kê nền để cập nhật Hero card
-          viewModelScope.launch {
-            val stats = statsRepository?.getUserStats()?.getOrNull()
-            if (stats != null) {
-              val spentMap = stats.spentByGroup.associate { it.groupId to it.amount }
-              val updatedState = GroupListUiState.Success(
-                groups = groups,
-                totalToReceive = stats.totalOthersOweToMe,
-                totalToPay = stats.totalOwedToOthers,
-                groupSpentMap = spentMap
-              )
-              _uiState.value = updatedState
-              cachedState = updatedState
-            }
+    activeLoadJob = viewModelScope.launch {
+      try {
+        // Tải song song danh sách nhóm và số dư thống kê
+        val groupsDeferred = async { groupRepository.getGroups() }
+        val statsDeferred = async { statsRepository?.getUserStats() }
+
+        val groupsResult = groupsDeferred.await()
+        val statsResult = statsDeferred.await()
+
+        if (groupsResult.isSuccess) {
+          val rawGroups = groupsResult.getOrDefault(emptyList())
+          val groups = rawGroups.map { g ->
+            val b = groupRepository.getLocalGroupBanner(g.id) ?: g.bannerUrl
+            g.copy(bannerUrl = b)
           }
+          val stats = statsResult?.getOrNull() ?: statsRepository?.let { com.example.splitbill.data.StatsRepository.getCachedStats() }
+
+          val current = _uiState.value
+          val lastSuccess = (current as? GroupListUiState.Success) ?: cachedState
+
+          val spentMap = if (stats != null) {
+            stats.spentByGroup.associate { it.groupId to it.amount }
+          } else {
+            lastSuccess?.groupSpentMap ?: emptyMap()
+          }
+
+          val balanceMap = if (stats != null) {
+            stats.groupBalances
+          } else {
+            lastSuccess?.groupBalanceMap ?: emptyMap()
+          }
+
+          val totalReceive = stats?.totalOthersOweToMe ?: lastSuccess?.totalToReceive ?: 0.0
+          val totalPay = stats?.totalOwedToOthers ?: lastSuccess?.totalToPay ?: 0.0
+
+          val successState = GroupListUiState.Success(
+            groups = groups,
+            actionMessage = lastSuccess?.actionMessage,
+            totalToReceive = totalReceive,
+            totalToPay = totalPay,
+            groupSpentMap = spentMap,
+            groupBalanceMap = balanceMap
+          )
+          _uiState.value = successState
+          cachedState = successState
         } else {
-          _uiState.value = GroupListUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tải nhóm")
+          val errorMsg = groupsResult.exceptionOrNull()?.message ?: "Lỗi tải nhóm"
+          if (_uiState.value !is GroupListUiState.Success && cachedState == null) {
+            _uiState.value = GroupListUiState.Error(errorMsg)
+          }
+        }
+      } catch (e: Exception) {
+        if (_uiState.value !is GroupListUiState.Success && cachedState == null) {
+          _uiState.value = GroupListUiState.Error(e.message ?: "Lỗi tải nhóm")
         }
       } finally {
+        activeLoadJob = null
         onComplete?.invoke()
       }
     }
