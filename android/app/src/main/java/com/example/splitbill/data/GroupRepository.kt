@@ -7,6 +7,7 @@ import com.example.splitbill.data.api.ActivityResponse
 import com.example.splitbill.data.supabase.*
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ class GroupRepository(
 
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val auth get() = SupabaseConfig.client.auth
+  private val storage get() = SupabaseConfig.client.storage
 
   /**
    * Quan sát danh sách nhóm từ Room Database theo mô hình Single Source of Truth (SSOT).
@@ -40,12 +42,32 @@ class GroupRepository(
     }
   }
 
+  fun sanitizeBannerUrl(url: String?): String? {
+    if (url.isNullOrBlank() || url == "default") return null
+    if (url.startsWith("file:", ignoreCase = true) || url.startsWith("/")) {
+      return try {
+        val uri = android.net.Uri.parse(url)
+        val path = uri.path ?: url
+        val file = java.io.File(path)
+        if (file.exists()) url else null
+      } catch (_: Exception) { null }
+    }
+    return url
+  }
+
   fun getLocalGroupBanner(groupId: String): String? {
     return try {
-      tokenManager.getContext().getSharedPreferences("group_banners", android.content.Context.MODE_PRIVATE)
+      val path = tokenManager.getContext().getSharedPreferences("group_banners", android.content.Context.MODE_PRIVATE)
         .getString("banner_$groupId", null)
+      sanitizeBannerUrl(path)
     } catch (_: Exception) { null }
   }
+
+  val bannerUpdateFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, String>>(
+    replay = 1,
+    extraBufferCapacity = 10,
+    onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+  )
 
   fun saveLocalGroupBanner(groupId: String, bannerUrl: String) {
     try {
@@ -53,6 +75,7 @@ class GroupRepository(
         .edit()
         .putString("banner_$groupId", bannerUrl)
         .apply()
+      bannerUpdateFlow.tryEmit(Pair(groupId, bannerUrl))
     } catch (_: Exception) {}
   }
 
@@ -66,16 +89,44 @@ class GroupRepository(
         }
       } catch (_: Exception) {}
     }
-    return try {
-      SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
-      postgrest["groups"].update({
-        set("icon", bannerUrl)
-      }) {
-        filter { eq("id", groupId) }
+    // Chỉ cập nhật lên Supabase nếu là URL đám mây https:// hoặc http://
+    if (bannerUrl.startsWith("http://", ignoreCase = true) || bannerUrl.startsWith("https://", ignoreCase = true)) {
+      return try {
+        SupabaseConfig.ensureSession(tokenManager.getCachedToken(), tokenManager)
+        postgrest["groups"].update({
+          set("icon", bannerUrl)
+        }) {
+          filter { eq("id", groupId) }
+        }
+        Result.success(Unit)
+      } catch (e: Exception) {
+        Result.success(Unit)
       }
-      Result.success(Unit)
+    }
+    return Result.success(Unit)
+  }
+
+  suspend fun uploadGroupBanner(groupId: String, imageBytes: ByteArray): Result<String> {
+    return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val fileName = "banners/$groupId/${java.util.UUID.randomUUID()}.jpg"
+
+      // Tải lên Supabase Storage (thử bucket avatars hoặc receipts)
+      val publicUrl = try {
+        val bucket = storage["avatars"]
+        bucket.upload(fileName, imageBytes) { upsert = true }
+        bucket.publicUrl(fileName)
+      } catch (_: Exception) {
+        val bucket = storage["receipts"]
+        bucket.upload(fileName, imageBytes) { upsert = true }
+        bucket.publicUrl(fileName)
+      }
+
+      updateGroupBanner(groupId, publicUrl)
+      Result.success(publicUrl)
     } catch (e: Exception) {
-      Result.success(Unit)
+      Result.failure(e)
     }
   }
 
@@ -83,13 +134,15 @@ class GroupRepository(
     return try {
       val cachedToken = tokenManager.getCachedToken()
       val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
-      val currentUserId = auth.currentUserOrNull()?.id
+      val currentUserId = auth.currentUserOrNull()?.id ?: tokenManager.getUserId()
       if (!sessionValid || currentUserId == null || auth.currentSessionOrNull() == null) {
         tokenManager.deleteToken()
         throw Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn")
       }
 
       // Tải song song danh sách nhóm trực tiếp và thành viên nhóm
+      var dgFailed = false
+      var mrFailed = false
       val (directGroups, memberRecords) = coroutineScope {
         val dgDeferred = async {
           try {
@@ -97,6 +150,7 @@ class GroupRepository(
           } catch (e: Exception) {
             if (SupabaseConfig.isAuthError(e)) throw e
             android.util.Log.w("GroupRepository", "Query direct groups failed: ${e.message}")
+            dgFailed = true
             emptyList()
           }
         }
@@ -108,10 +162,29 @@ class GroupRepository(
           } catch (e: Exception) {
             if (SupabaseConfig.isAuthError(e)) throw e
             android.util.Log.w("GroupRepository", "Query group_members failed: ${e.message}")
+            mrFailed = true
             emptyList()
           }
         }
         Pair(dgDeferred.await(), mrDeferred.await())
+      }
+
+      if (dgFailed && mrFailed) {
+        val localGroups = groupDao?.getGroups() ?: emptyList()
+        if (localGroups.isNotEmpty()) {
+          return Result.success(localGroups.map { g ->
+            GroupResponse(
+              id = g.id,
+              name = g.name,
+              createdBy = g.createdBy,
+              createdByName = g.createdByName,
+              memberCount = g.memberCount,
+              createdAt = g.createdAt ?: "",
+              bannerUrl = getLocalGroupBanner(g.id)
+            )
+          })
+        }
+        throw Exception("Không thể kết nối đến máy chủ để tải danh sách nhóm")
       }
 
       val memberGroupIds = memberRecords.map { it.groupId }
@@ -127,10 +200,26 @@ class GroupRepository(
         }
       } else emptyList()
 
-      // Hợp nhất danh sách nhóm
-      val groups = (directGroups + groupsFromMemberIds).distinctBy { it.id }
+      // Hợp nhất danh sách nhóm và sắp xếp thời gian tạo giảm dần cố định (tránh nhảy vị trí khi load)
+      val groups = (directGroups + groupsFromMemberIds)
+        .distinctBy { it.id }
+        .sortedByDescending { it.createdAt ?: "" }
 
       if (groups.isEmpty()) {
+        val localGroups = groupDao?.getGroups() ?: emptyList()
+        if (localGroups.isNotEmpty() && (dgFailed || mrFailed)) {
+          return Result.success(localGroups.map { g ->
+            GroupResponse(
+              id = g.id,
+              name = g.name,
+              createdBy = g.createdBy,
+              createdByName = g.createdByName,
+              memberCount = g.memberCount,
+              createdAt = g.createdAt ?: "",
+              bannerUrl = getLocalGroupBanner(g.id)
+            )
+          })
+        }
         return Result.success(emptyList())
       }
 
@@ -146,7 +235,10 @@ class GroupRepository(
       val memberCountMap = allMembers.groupBy { it.groupId }.mapValues { it.value.size }
 
       val result = groups.map { g ->
-        val banner = getLocalGroupBanner(g.id) ?: g.icon?.takeIf { it.isNotBlank() && it != "default" }
+        val banner = getLocalGroupBanner(g.id) ?: sanitizeBannerUrl(g.icon)
+        if (banner != null && getLocalGroupBanner(g.id) == null) {
+          saveLocalGroupBanner(g.id, banner)
+        }
         GroupResponse(
           id = g.id,
           name = g.name,
@@ -218,7 +310,10 @@ class GroupRepository(
         .select { filter { eq("group_id", groupId) } }
         .decodeList<GroupMemberEntity>()
 
-      val banner = getLocalGroupBanner(group.id) ?: group.icon?.takeIf { it.isNotBlank() && it != "default" }
+      val banner = getLocalGroupBanner(group.id) ?: sanitizeBannerUrl(group.icon)
+      if (banner != null && getLocalGroupBanner(group.id) == null) {
+        saveLocalGroupBanner(group.id, banner)
+      }
 
       Result.success(
         GroupResponse(

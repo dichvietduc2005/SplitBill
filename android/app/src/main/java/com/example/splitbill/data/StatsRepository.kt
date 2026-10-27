@@ -10,6 +10,12 @@ import kotlinx.coroutines.coroutineScope
 
 class StatsRepository(private val tokenManager: TokenManager) {
 
+  companion object {
+    @Volatile private var cachedStats: UserStatsResponse? = null
+    fun getCachedStats(): UserStatsResponse? = cachedStats
+    fun clearCache() { cachedStats = null }
+  }
+
   private val postgrest get() = SupabaseConfig.client.postgrest
   private val auth get() = SupabaseConfig.client.auth
 
@@ -92,18 +98,23 @@ class StatsRepository(private val tokenManager: TokenManager) {
 
       val splitsByBillId = allSplits.groupBy { it.billId }
 
+      val groupBalanceMap = mutableMapOf<String, Double>()
       for (group in groups) {
         val gBills = allBills.filter { it.groupId == group.id }
         val gSettlements = allSettlements.filter { it.groupId == group.id }
 
-        // Tính chi tiêu
+        // Tính chi tiêu nhóm và của user
+        val groupBillsTotal = gBills.sumOf {
+          val rate = if (it.exchangeRate > 0) it.exchangeRate else 1.0
+          it.totalAmount * rate
+        }
         val gBillIds = gBills.mapNotNull { it.id }.toSet()
         val userSplits = allSplits.filter { gBillIds.contains(it.billId) && it.userId == userId }
-        val groupTotalSpent = userSplits.sumOf { it.amountOwed }
-        if (groupTotalSpent > 0) {
-          spentByGroupMap[group.id] = (spentByGroupMap[group.id] ?: 0.0) + groupTotalSpent
-          totalSpent += groupTotalSpent
-        }
+        val userGroupSpent = userSplits.sumOf { it.amountOwed }
+        totalSpent += userGroupSpent
+
+        // Thẻ nhóm hiển thị tổng chi tiêu toàn nhóm nếu có hóa đơn, nếu không thì phần chi của user
+        spentByGroupMap[group.id] = if (groupBillsTotal > 0) groupBillsTotal else userGroupSpent
 
         // Monthly trend
         for (split in userSplits) {
@@ -115,7 +126,8 @@ class StatsRepository(private val tokenManager: TokenManager) {
           }
         }
 
-        // Tính nợ bằng DebtSimplifier
+        // Tính nợ chuẩn xác cho từng nhóm bằng DebtSimplifier
+        var groupNetBalance = 0.0
         if (gBills.isNotEmpty()) {
           val billResponses = gBills.map { b ->
             val bSplits = splitsByBillId[b.id] ?: emptyList()
@@ -153,11 +165,14 @@ class StatsRepository(private val tokenManager: TokenManager) {
           for (d in simplified) {
             if (d.fromUserId == userId) {
               totalOwedToOthers += d.amount
+              groupNetBalance -= d.amount
             } else if (d.toUserId == userId) {
               totalOthersOweToMe += d.amount
+              groupNetBalance += d.amount
             }
           }
         }
+        groupBalanceMap[group.id] = Math.round(groupNetBalance * 100.0) / 100.0
       }
 
       val spentByGroupList = spentByGroupMap.map { (groupId, amount) ->
@@ -175,19 +190,21 @@ class StatsRepository(private val tokenManager: TokenManager) {
         )
       }.sortedBy { it.month }
 
-      Result.success(
-        UserStatsResponse(
-          totalSpent = Math.round(totalSpent * 100.0) / 100.0,
-          totalOwedToOthers = Math.round(totalOwedToOthers * 100.0) / 100.0,
-          totalOthersOweToMe = Math.round(totalOthersOweToMe * 100.0) / 100.0,
-          spentByGroup = spentByGroupList,
-          monthlyTrend = monthlyTrendList
-        )
+      val response = UserStatsResponse(
+        totalSpent = Math.round(totalSpent * 100.0) / 100.0,
+        totalOwedToOthers = Math.round(totalOwedToOthers * 100.0) / 100.0,
+        totalOthersOweToMe = Math.round(totalOthersOweToMe * 100.0) / 100.0,
+        spentByGroup = spentByGroupList,
+        monthlyTrend = monthlyTrendList,
+        groupBalances = groupBalanceMap
       )
+      cachedStats = response
+      Result.success(response)
     } catch (e: Exception) {
       if (SupabaseConfig.isAuthError(e)) {
         tokenManager.deleteToken()
       }
+      cachedStats?.let { return Result.success(it) }
       Result.failure(e)
     }
   }

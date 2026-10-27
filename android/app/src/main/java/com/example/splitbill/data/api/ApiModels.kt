@@ -231,7 +231,8 @@ data class UserStatsResponse(
   val totalOwedToOthers: Double,
   val totalOthersOweToMe: Double,
   val spentByGroup: List<GroupSpent>,
-  val monthlyTrend: List<MonthlySpent>
+  val monthlyTrend: List<MonthlySpent>,
+  val groupBalances: Map<String, Double> = emptyMap()
 )
 
 @Serializable

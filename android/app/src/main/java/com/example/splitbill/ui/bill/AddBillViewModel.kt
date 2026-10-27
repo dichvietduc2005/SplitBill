@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.splitbill.data.BillRepository
 import com.example.splitbill.data.api.BillSplitItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +34,8 @@ class AddBillViewModel(
     exchangeRate: Double,
     splits: List<BillSplitItem>,
     receiptBytes: ByteArray? = null,
-    category: String = "GENERAL"
+    category: String = "GENERAL",
+    knownUsernames: Map<String, String> = emptyMap()
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -54,19 +57,30 @@ class AddBillViewModel(
 
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
-      val result = billRepository.createBill(groupId, description, totalAmount, paidByUserId, currency, exchangeRate, splits, category)
+      val result = billRepository.createBill(
+        groupId = groupId,
+        description = description,
+        totalAmount = totalAmount,
+        paidByUserId = paidByUserId,
+        currency = currency,
+        exchangeRate = exchangeRate,
+        splits = splits,
+        category = category,
+        knownUsernames = knownUsernames
+      )
       if (result.isSuccess) {
         val bill = result.getOrNull()
         if (bill != null && receiptBytes != null) {
-          val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
-          _uiState.value = if (uploadResult.isSuccess) {
-            AddBillUiState.Success(billId = bill.id, groupId = groupId)
-          } else {
-            AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
+          // Tải ảnh hóa đơn ngầm không chặn UI
+          CoroutineScope(Dispatchers.IO).launch {
+            try {
+              billRepository.uploadReceipt(bill.id, receiptBytes)
+            } catch (e: Exception) {
+              android.util.Log.w("AddBillViewModel", "Upload receipt failed: ${e.message}")
+            }
           }
-        } else {
-          _uiState.value = AddBillUiState.Success(billId = bill?.id, groupId = groupId)
         }
+        _uiState.value = AddBillUiState.Success(billId = bill?.id, groupId = groupId)
       } else {
         _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi tạo hóa đơn")
       }
@@ -82,7 +96,8 @@ class AddBillViewModel(
     exchangeRate: Double,
     splits: List<BillSplitItem>,
     receiptBytes: ByteArray? = null,
-    category: String = "GENERAL"
+    category: String = "GENERAL",
+    knownUsernames: Map<String, String> = emptyMap()
   ) {
     if (description.isBlank()) {
       _uiState.value = AddBillUiState.Error("Vui lòng nhập mô tả hóa đơn")
@@ -104,19 +119,30 @@ class AddBillViewModel(
 
     _uiState.value = AddBillUiState.Loading
     viewModelScope.launch {
-      val result = billRepository.updateBill(billId, description, totalAmount, paidByUserId, currency, exchangeRate, splits, category)
+      val result = billRepository.updateBill(
+        billId = billId,
+        description = description,
+        totalAmount = totalAmount,
+        paidByUserId = paidByUserId,
+        currency = currency,
+        exchangeRate = exchangeRate,
+        splits = splits,
+        category = category,
+        knownUsernames = knownUsernames
+      )
       if (result.isSuccess) {
         val bill = result.getOrNull()
         if (bill != null && receiptBytes != null) {
-          val uploadResult = billRepository.uploadReceipt(bill.id, receiptBytes)
-          _uiState.value = if (uploadResult.isSuccess) {
-            AddBillUiState.Success(billId = bill.id, groupId = null)
-          } else {
-            AddBillUiState.Error(uploadResult.exceptionOrNull()?.message ?: "Lỗi upload ảnh hóa đơn")
+          // Tải ảnh hóa đơn ngầm không chặn UI
+          kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+              billRepository.uploadReceipt(bill.id, receiptBytes)
+            } catch (e: Exception) {
+              android.util.Log.w("AddBillViewModel", "Upload receipt failed: ${e.message}")
+            }
           }
-        } else {
-          _uiState.value = AddBillUiState.Success(billId = bill?.id ?: billId, groupId = null)
         }
+        _uiState.value = AddBillUiState.Success(billId = bill?.id ?: billId, groupId = null)
       } else {
         _uiState.value = AddBillUiState.Error(result.exceptionOrNull()?.message ?: "Lỗi cập nhật hóa đơn")
       }

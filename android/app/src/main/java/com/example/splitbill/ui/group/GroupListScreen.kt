@@ -388,14 +388,15 @@ fun GroupListScreen(
                   val coverUrl = group.bannerUrl?.takeIf { it.isNotBlank() } ?: defaultCover
                   val spentAmount = state.groupSpentMap[group.id] ?: 0.0
 
-                  // Phân bổ trạng thái công nợ mẫu/thực tế cho thẻ
+                  // Trạng thái công nợ thực tế của người dùng trong nhóm
+                  val netBalance = state.groupBalanceMap[group.id] ?: 0.0
                   val balanceText: String
                   val balanceColor: Color
-                  if (index % 3 == 0 && state.totalToReceive > 0) {
-                    balanceText = "Bạn nhận ${formatVndAmount(state.totalToReceive / maxOf(1, state.groups.size))}đ"
+                  if (netBalance > 0.5) {
+                    balanceText = "Bạn nhận ${formatVndAmount(netBalance)}đ"
                     balanceColor = Color(0xFF239B75)
-                  } else if (index % 3 == 1 && state.totalToPay > 0) {
-                    balanceText = "Bạn nợ ${formatVndAmount(state.totalToPay / maxOf(1, state.groups.size))}đ"
+                  } else if (netBalance < -0.5) {
+                    balanceText = "Bạn nợ ${formatVndAmount(kotlin.math.abs(netBalance))}đ"
                     balanceColor = Color(0xFFBA1A1A)
                   } else {
                     balanceText = "Đã sòng phẳng 0đ"

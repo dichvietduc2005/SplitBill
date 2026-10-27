@@ -10,7 +10,10 @@ import com.example.splitbill.utils.DebtSimplifier
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 class BillRepository(
@@ -368,23 +371,36 @@ class BillRepository(
     exchangeRate: Double,
     splits: List<BillSplitItem>,
     category: String = "GENERAL",
-    clientBillId: String? = null
+    clientBillId: String? = null,
+    knownUsernames: Map<String, String> = emptyMap()
   ): Result<BillResponse> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      val currentUserId = auth.currentUserOrNull()?.id ?: tokenManager.getUserId() ?: paidByUserId
+      if (!sessionValid || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
+
       val billId = clientBillId ?: UUID.randomUUID().toString()
 
-      postgrest["bills"].upsert(
-        BillEntity(
-          id = billId,
-          groupId = groupId,
-          description = description,
-          totalAmount = totalAmount,
-          paidByUserId = paidByUserId,
-          currency = currency,
-          exchangeRate = exchangeRate,
-          category = category
-        )
+      val billEntity = BillEntity(
+        id = billId,
+        groupId = groupId,
+        description = description,
+        totalAmount = totalAmount,
+        paidByUserId = paidByUserId,
+        currency = currency,
+        exchangeRate = exchangeRate,
+        category = category
       )
+
+      if (clientBillId != null) {
+        postgrest["bills"].upsert(billEntity)
+      } else {
+        postgrest["bills"].insert(billEntity)
+      }
 
       val splitEntities = splits.map {
         BillSplitEntity(
@@ -395,38 +411,74 @@ class BillRepository(
       }
 
       if (splitEntities.isNotEmpty()) {
-        try {
-          postgrest["bill_splits"].delete { filter { eq("bill_id", billId) } }
-        } catch (_: Exception) {}
+        if (clientBillId != null) {
+          try {
+            postgrest["bill_splits"].delete { filter { eq("bill_id", billId) } }
+          } catch (_: Exception) {}
+        }
         postgrest["bill_splits"].insert(splitEntities)
       }
 
-      val profiles = postgrest["profiles"]
-        .select()
-        .decodeList<ProfileEntity>()
-      val profileMap = profiles.associateBy { it.id }
+      val profileMap = knownUsernames
 
       val splitResponses = splits.map {
         BillSplitResponse(
           userId = it.userId,
-          username = profileMap[it.userId]?.username ?: "User",
+          username = profileMap[it.userId] ?: "User",
           amountOwed = it.amount
         )
       }
 
-      // Log activity
-      try {
-        val currentUserId = auth.currentUserOrNull()?.id ?: paidByUserId
-        val actorName = profileMap[currentUserId]?.username ?: "Ai đó"
-        postgrest["activity_logs"].insert(
-          ActivityLogEntity(
-            groupId = groupId,
-            userId = currentUserId,
-            activityType = "BILL_CREATED",
-            description = "$actorName đã thêm hóa đơn '$description'|CAT:$category"
+      // Ghi activity log bất đồng bộ ngầm hoàn toàn - KHÔNG chặn luồng phản hồi chính
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          val actorName = profileMap[currentUserId] ?: "Ai đó"
+          postgrest["activity_logs"].insert(
+            ActivityLogEntity(
+              groupId = groupId,
+              userId = currentUserId,
+              activityType = "BILL_CREATED",
+              description = "$actorName đã thêm hóa đơn '$description'|CAT:$category"
+            )
           )
-        )
-      } catch (_: Exception) {}
+        } catch (_: Exception) {}
+      }
+
+      // Xóa cache thống kê để UI reload lại số dư mới nhất
+      StatsRepository.clearCache()
+
+      // Cập nhật ngay vào Room cache cục bộ
+      billDao?.let { dao ->
+        try {
+          dao.insertBill(
+            com.example.splitbill.data.local.entity.BillEntityLocal(
+              id = billId,
+              groupId = groupId,
+              paidBy = paidByUserId,
+              paidByUsername = profileMap[paidByUserId] ?: "User",
+              title = description,
+              description = description,
+              totalAmount = totalAmount,
+              currency = currency,
+              exchangeRate = exchangeRate,
+              category = category,
+              receiptImageUrl = null,
+              isPaid = false,
+              createdAt = java.time.Instant.now().toString()
+            )
+          )
+          dao.insertSplits(
+            splits.map { s ->
+              com.example.splitbill.data.local.entity.BillSplitEntityLocal(
+                billId = billId,
+                userId = s.userId,
+                username = profileMap[s.userId] ?: "User",
+                amountOwed = s.amount
+              )
+            }
+          )
+        } catch (_: Exception) {}
+      }
 
       Result.success(
         BillResponse(
@@ -435,7 +487,7 @@ class BillRepository(
           description = description,
           totalAmount = totalAmount,
           paidByUserId = paidByUserId,
-          paidByUsername = profileMap[paidByUserId]?.username ?: "User",
+          paidByUsername = profileMap[paidByUserId] ?: "User",
           currency = currency,
           exchangeRate = exchangeRate,
           category = category,
@@ -446,6 +498,9 @@ class BillRepository(
         )
       )
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       Result.failure(e)
     }
   }
@@ -458,9 +513,17 @@ class BillRepository(
     currency: String,
     exchangeRate: Double,
     splits: List<BillSplitItem>,
-    category: String = "GENERAL"
+    category: String = "GENERAL",
+    knownUsernames: Map<String, String> = emptyMap()
   ): Result<BillResponse> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
+      if (!sessionValid || auth.currentSessionOrNull() == null) {
+        tokenManager.deleteToken()
+        return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
+      }
+
       postgrest["bills"].update({
         set("description", description)
         set("total_amount", totalAmount)
@@ -483,48 +546,85 @@ class BillRepository(
         postgrest["bill_splits"].insert(splitEntities)
       }
 
-      val profiles = postgrest["profiles"]
-        .select()
-        .decodeList<ProfileEntity>()
-      val profileMap = profiles.associateBy { it.id }
+      val profileMap = knownUsernames
 
       val splitResponses = splits.map {
         BillSplitResponse(
           userId = it.userId,
-          username = profileMap[it.userId]?.username ?: "User",
+          username = profileMap[it.userId] ?: "User",
           amountOwed = it.amount
         )
       }
 
-      val updatedBill = postgrest["bills"]
-        .select { filter { eq("id", billId) } }
-        .decodeSingle<BillEntity>()
+      val localBill = billDao?.getBillsForGroup("")?.firstOrNull { it.id == billId }
+      val groupId = localBill?.groupId ?: ""
+      val receiptUrl = localBill?.receiptImageUrl
+
+      // Xóa cache thống kê để UI reload lại số dư mới
+      StatsRepository.clearCache()
+
+      // Cập nhật Room cache
+      billDao?.let { dao ->
+        try {
+          if (localBill != null) {
+            dao.insertBill(
+              localBill.copy(
+                description = description,
+                title = description,
+                totalAmount = totalAmount,
+                paidBy = paidByUserId,
+                paidByUsername = profileMap[paidByUserId] ?: localBill.paidByUsername,
+                currency = currency,
+                exchangeRate = exchangeRate,
+                category = category
+              )
+            )
+          }
+          dao.deleteSplitsForBills(listOf(billId))
+          dao.insertSplits(
+            splits.map { s ->
+              com.example.splitbill.data.local.entity.BillSplitEntityLocal(
+                billId = billId,
+                userId = s.userId,
+                username = profileMap[s.userId] ?: "User",
+                amountOwed = s.amount
+              )
+            }
+          )
+        } catch (_: Exception) {}
+      }
 
       Result.success(
         BillResponse(
           id = billId,
-          groupId = updatedBill.groupId,
+          groupId = groupId,
           description = description,
           totalAmount = totalAmount,
           paidByUserId = paidByUserId,
-          paidByUsername = profileMap[paidByUserId]?.username ?: "User",
+          paidByUsername = profileMap[paidByUserId] ?: "User",
           currency = currency,
           exchangeRate = exchangeRate,
           category = category,
-          receiptUrl = updatedBill.receiptUrl,
-          isPaid = updatedBill.isPaid,
+          receiptUrl = receiptUrl,
+          isPaid = localBill?.isPaid ?: false,
           splits = splitResponses,
-          createdAt = updatedBill.createdAt ?: ""
+          createdAt = localBill?.createdAt ?: java.time.Instant.now().toString()
         )
       )
     } catch (e: Exception) {
+      if (SupabaseConfig.isAuthError(e)) {
+        tokenManager.deleteToken()
+      }
       Result.failure(e)
     }
   }
 
   suspend fun deleteBill(billId: String): Result<Unit> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
       postgrest["bills"].delete { filter { eq("id", billId) } }
+      billDao?.deleteBill(billId)
       Result.success(Unit)
     } catch (e: Exception) {
       Result.failure(e)
@@ -533,6 +633,8 @@ class BillRepository(
 
   suspend fun uploadReceipt(billId: String, imageBytes: ByteArray): Result<String> {
     return try {
+      val cachedToken = tokenManager.getCachedToken()
+      SupabaseConfig.ensureSession(cachedToken, tokenManager)
       val fileName = "$billId/${UUID.randomUUID()}.jpg"
       val bucket = storage["receipts"]
       bucket.upload(fileName, imageBytes) {
