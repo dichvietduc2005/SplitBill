@@ -1,5 +1,10 @@
 package com.example.splitbill.ui.bill
 
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -9,44 +14,56 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
-import androidx.compose.material.icons.rounded.EditNote
-import androidx.compose.material.icons.rounded.Wallet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import com.example.splitbill.data.ExchangeRateRepository
+import com.example.splitbill.data.SettingsManager
+import com.example.splitbill.data.TokenManager
+import com.example.splitbill.data.api.BillResponse
 import com.example.splitbill.data.api.BillSplitItem
 import com.example.splitbill.data.api.MemberResponse
-import com.example.splitbill.data.api.BillResponse
+import com.example.splitbill.data.model.BillCategory
+import com.example.splitbill.data.supabase.SupabaseConfig
 import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.Motion
-import com.example.splitbill.ui.localization.localized
-import com.example.splitbill.ui.components.SplitBillTopBar
-import com.example.splitbill.ui.components.SplitBillCard
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.splitbill.ui.components.CategoryPickerBottomSheet
 import com.example.splitbill.ui.components.ConfettiOverlay
-import coil3.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
+import com.example.splitbill.ui.components.GradientAvatar
+import com.example.splitbill.ui.components.SplitBillTopBar
+import com.example.splitbill.ui.localization.localized
+import com.example.splitbill.utils.HapticManager
+import com.example.splitbill.utils.NotificationHelper
+import com.example.splitbill.utils.SoundManager
 import java.util.Locale
-import com.example.splitbill.data.TokenManager
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,31 +85,30 @@ fun AddBillScreen(
   val isEditMode = existingBill != null
 
   var description by rememberSaveable(existingBill) { mutableStateOf(existingBill?.description ?: "") }
-  var totalAmountText by rememberSaveable(existingBill) { 
-    mutableStateOf(existingBill?.let { String.format(Locale.US, "%,d", it.totalAmount.toLong()) } ?: "") 
+  var totalAmountText by rememberSaveable(existingBill) {
+    mutableStateOf(existingBill?.let { String.format(Locale.US, "%,d", it.totalAmount.toLong()) } ?: "")
   }
-  var selectedPayerId by rememberSaveable(existingBill, currentUserId, members) { 
-    mutableStateOf(existingBill?.paidByUserId ?: currentUserId ?: members.firstOrNull()?.userId ?: "") 
+  var selectedPayerId by rememberSaveable(existingBill, currentUserId, members) {
+    mutableStateOf(existingBill?.paidByUserId ?: currentUserId ?: members.firstOrNull()?.userId ?: "")
   }
-  // Map: userId -> amount text they owe
+
+  // Splits tracking
   val splitAmounts = remember { mutableStateMapOf<String, String>() }
-  // Map: userId -> percentage
   val splitPercentages = remember { mutableStateMapOf<String, String>() }
-  // Map: userId -> shares
   val splitShares = remember { mutableStateMapOf<String, String>() }
 
   var splitMode by rememberSaveable { mutableStateOf(SplitMode.EQUAL) }
-  var payerDropdownExpanded by remember { mutableStateOf(false) }
+  var showPayerSheet by remember { mutableStateOf(false) }
   var showSuccessOverlay by remember { mutableStateOf(false) }
 
-  var selectedCategory by rememberSaveable(existingBill) { mutableStateOf(existingBill?.category ?: "GENERAL") }
+  var selectedCategory by rememberSaveable(existingBill) { mutableStateOf(existingBill?.category ?: "FOOD") }
   var showCategoryPicker by remember { mutableStateOf(false) }
 
-  var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+  var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
   var imageBytes by remember { mutableStateOf<ByteArray?>(null) }
 
-  val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-    contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+  val galleryLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.GetContent()
   ) { uri ->
     if (uri != null) {
       selectedImageUri = uri
@@ -100,12 +116,15 @@ fun AddBillScreen(
     }
   }
 
+  // Currency & Exchange Rate State
   var selectedCurrency by rememberSaveable(existingBill) { mutableStateOf(existingBill?.currency ?: "VND") }
-  var exchangeRateText by rememberSaveable(existingBill) { 
-    mutableStateOf(existingBill?.exchangeRate?.toString() ?: "1.0") 
+  var exchangeRateText by rememberSaveable(existingBill) {
+    mutableStateOf(existingBill?.exchangeRate?.toString() ?: "1.0")
   }
+  var showCurrencySheet by remember { mutableStateOf(false) }
+  var showExchangeRateDialog by remember { mutableStateOf(false) }
 
-  val exchangeRateRepository = remember { com.example.splitbill.data.ExchangeRateRepository() }
+  val exchangeRateRepository = remember { ExchangeRateRepository() }
   LaunchedEffect(selectedCurrency) {
     if (selectedCurrency == "VND") {
       exchangeRateText = "1.0"
@@ -117,7 +136,7 @@ fun AddBillScreen(
     }
   }
 
-  // Map: userId -> is participating in the bill
+  // Active participants map: userId -> is participating
   val activeMemberIds = remember { mutableStateMapOf<String, Boolean>() }
 
   // Pre-populate splits and active members if in edit mode
@@ -134,8 +153,8 @@ fun AddBillScreen(
       val total = existingBill.totalAmount
       val activeCount = if (participantIds.isNotEmpty()) participantIds.size else members.size
       val perPerson = Math.floor(total / activeCount)
-      val isEachEqual = existingBill.splits.filter { it.amountOwed > 0 }.all { 
-        Math.abs(it.amountOwed - perPerson) <= 2.0 || Math.abs(it.amountOwed - (perPerson + (total - perPerson * activeCount))) <= 2.0 
+      val isEachEqual = existingBill.splits.filter { it.amountOwed > 0 }.all {
+        abs(it.amountOwed - perPerson) <= 2.0 || abs(it.amountOwed - (perPerson + (total - perPerson * activeCount))) <= 2.0
       }
       splitMode = if (isEachEqual) SplitMode.EQUAL else SplitMode.CUSTOM
     } else {
@@ -147,13 +166,13 @@ fun AddBillScreen(
     }
   }
 
-  // Auto-fill equal splits when amount, active members, currency, exchange rate, or payer changes
+  // Auto-fill equal splits
   LaunchedEffect(totalAmountText, splitMode, selectedCurrency, exchangeRateText, selectedPayerId, activeMemberIds.toMap()) {
     if (splitMode == SplitMode.EQUAL && members.isNotEmpty()) {
       val total = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
       val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
       val activeMembers = members.filter { activeMemberIds[it.userId] != false }
-      
+
       if (activeMembers.isEmpty()) {
         members.forEach { splitAmounts[it.userId] = "" }
         return@LaunchedEffect
@@ -162,7 +181,7 @@ fun AddBillScreen(
       if (selectedCurrency == "VND" || rate <= 1.0) {
         val perPerson = Math.floor(total / activeMembers.size)
         val remainder = total - (perPerson * activeMembers.size)
-        
+
         members.forEach { member ->
           if (activeMemberIds[member.userId] == false) {
             splitAmounts[member.userId] = ""
@@ -176,7 +195,7 @@ fun AddBillScreen(
         val totalVnd = total * rate
         val perPersonVnd = Math.floor(totalVnd / activeMembers.size)
         val remainderVnd = totalVnd - (perPersonVnd * activeMembers.size)
-        
+
         members.forEach { member ->
           if (activeMemberIds[member.userId] == false) {
             splitAmounts[member.userId] = ""
@@ -235,10 +254,14 @@ fun AddBillScreen(
   }
 
   val sumPercentages = members.sumOf { splitPercentages[it.userId]?.toDoubleOrNull() ?: 0.0 }
-  val percentageWarning = splitMode == SplitMode.PERCENTAGE && kotlin.math.abs(sumPercentages - 100.0) > 0.01
+  val percentageWarning = splitMode == SplitMode.PERCENTAGE && abs(sumPercentages - 100.0) > 0.1
 
-  val view = androidx.compose.ui.platform.LocalView.current
-  val settingsManager = remember { com.example.splitbill.data.SettingsManager(context) }
+  val parsedTotal = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
+  val customSum = members.sumOf { splitAmounts[it.userId]?.replace(",", "")?.toDoubleOrNull() ?: 0.0 }
+  val customMismatch = splitMode == SplitMode.CUSTOM && parsedTotal > 0 && abs(customSum - parsedTotal) > 1.0
+
+  val view = LocalView.current
+  val settingsManager = remember { SettingsManager(context) }
   val pushEnabled by settingsManager.pushEnabled.collectAsState(initial = true)
   val hapticEnabled by settingsManager.hapticEnabled.collectAsState(initial = true)
   val soundEnabled by settingsManager.soundEnabled.collectAsState(initial = true)
@@ -248,48 +271,211 @@ fun AddBillScreen(
   LaunchedEffect(uiState) {
     if (uiState is AddBillUiState.Success) {
       showSuccessOverlay = true
-      
+
       if (hapticEnabled) {
-        com.example.splitbill.utils.HapticManager.triggerSuccess(view)
+        HapticManager.triggerSuccess(view)
       }
       if (soundEnabled) {
-        com.example.splitbill.utils.SoundManager.playSuccessSound()
+        SoundManager.playSuccessSound()
       }
 
       if (pushEnabled) {
-        val createdBillId = (uiState as? com.example.splitbill.ui.bill.AddBillUiState.Success)?.billId
-        com.example.splitbill.utils.NotificationHelper.showBillNotification(
+        val createdBillId = (uiState as? AddBillUiState.Success)?.billId
+        NotificationHelper.showBillNotification(
           context = context,
           groupId = groupId,
           billId = createdBillId,
           groupName = pushGroupName,
           billDescription = if (isEditMode) "Cập nhật: $description" else description,
-          amount = totalAmountText + " " + selectedCurrency
+          amount = "$totalAmountText $selectedCurrency"
         )
       }
-      
-      kotlinx.coroutines.delay(400) // Fast navigation back
+
+      kotlinx.coroutines.delay(400)
       onNavigateBack()
       viewModel.resetState()
     }
   }
 
-  Box(modifier = modifier.fillMaxSize()) {
+  // Đảm bảo icon thanh trạng thái (giờ, pin, wifi) màu tối sắc nét trên nền sáng #F9F9F6
+  val activity = context as? android.app.Activity
+  DisposableEffect(Unit) {
+    if (activity != null) {
+      val insetsController = androidx.core.view.WindowCompat.getInsetsController(activity.window, view)
+      val original = insetsController.isAppearanceLightStatusBars
+      insetsController.isAppearanceLightStatusBars = true
+      onDispose {
+        insetsController.isAppearanceLightStatusBars = original
+      }
+    } else {
+      onDispose { }
+    }
+  }
+
+  // Palette constants matching the HTML design
+  val screenBg = Color(0xFFF9F9F6)
+  val cardBg = Color.White
+  val borderColor = Color(0xFFE8ECEB)
+  val primaryColor = Color(0xFF011C27)
+  val secondaryTextColor = Color(0xFF546068)
+  val surfaceContainerLow = Color(0xFFF4F4F1)
+  val surfaceContainer = Color(0xFFEEEEEE)
+
+  Box(modifier = modifier.fillMaxSize().background(screenBg)) {
     Scaffold(
-      containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+      containerColor = screenBg,
       topBar = {
-        SplitBillTopBar(
-          title = if (isEditMode) "Sửa hóa đơn" else "Thêm hóa đơn",
-          canNavigateBack = true,
-          onNavigateBack = onNavigateBack
-        )
+        Surface(
+          color = screenBg,
+          shadowElevation = 0.5.dp,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              // Nút Back tròn đồng bộ với GroupDetailScreen
+              Surface(
+                onClick = onNavigateBack,
+                shape = CircleShape,
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E6E9)),
+                shadowElevation = 1.dp,
+                modifier = Modifier.size(38.dp)
+              ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                  Icon(
+                    imageVector = Icons.Rounded.ArrowBackIosNew,
+                    contentDescription = "Quay lại",
+                    tint = primaryColor,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
+              }
+
+              // Tiêu đề màu Deep Navy Slate đồng bộ thương hiệu
+              Text(
+                text = if (isEditMode) "Sửa hóa đơn" else "Thêm hóa đơn",
+                style = MaterialTheme.typography.titleMedium.copy(
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 18.sp,
+                  letterSpacing = (-0.2).sp
+                ),
+                color = primaryColor,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
+              )
+
+              // Giữ cân đối tiêu đề ở giữa
+              Spacer(modifier = Modifier.size(38.dp))
+            }
+            HorizontalDivider(color = borderColor.copy(alpha = 0.7f), thickness = 0.8.dp)
+          }
+        }
+      },
+      bottomBar = {
+        // Bottom bar: Only Save Button (no redundant "Tất cả thông tin hợp lệ" box)
+        Surface(
+          modifier = Modifier.fillMaxWidth(),
+          color = screenBg.copy(alpha = 0.96f),
+          shadowElevation = 8.dp
+        ) {
+          Box(
+            modifier = Modifier
+              .navigationBarsPadding()
+              .padding(horizontal = 16.dp, vertical = 12.dp)
+          ) {
+            val isFormValid = uiState !is AddBillUiState.Loading &&
+              totalAmountText.isNotBlank() &&
+              parsedTotal > 0 &&
+              description.isNotBlank() &&
+              !percentageWarning &&
+              !customMismatch
+
+            Button(
+              onClick = {
+                val total = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
+                val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
+                val splits = members.mapNotNull { member ->
+                  val amount = splitAmounts[member.userId]?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+                  if (amount > 0) BillSplitItem(member.userId, amount) else null
+                }
+                val usernameMap = members.associate { it.userId to it.username }
+                if (isEditMode) {
+                  viewModel.updateBill(
+                    billId = existingBill!!.id,
+                    description = description,
+                    totalAmount = total,
+                    paidByUserId = selectedPayerId,
+                    currency = selectedCurrency,
+                    exchangeRate = rate,
+                    splits = splits,
+                    receiptBytes = imageBytes,
+                    category = selectedCategory,
+                    knownUsernames = usernameMap
+                  )
+                } else {
+                  viewModel.createBill(
+                    groupId = groupId,
+                    description = description,
+                    totalAmount = total,
+                    paidByUserId = selectedPayerId,
+                    currency = selectedCurrency,
+                    exchangeRate = rate,
+                    splits = splits,
+                    receiptBytes = imageBytes,
+                    category = selectedCategory,
+                    knownUsernames = usernameMap
+                  )
+                }
+              },
+              enabled = isFormValid,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+              shape = RoundedCornerShape(26.dp),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = primaryColor,
+                contentColor = Color.White,
+                disabledContainerColor = primaryColor.copy(alpha = 0.4f),
+                disabledContentColor = Color.White.copy(alpha = 0.6f)
+              ),
+              elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 2.dp)
+            ) {
+              if (uiState is AddBillUiState.Loading) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(22.dp),
+                  strokeWidth = 2.5.dp,
+                  color = Color.White
+                )
+              } else {
+                Icon(
+                  Icons.Rounded.ReceiptLong,
+                  contentDescription = null,
+                  modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                  text = if (isEditMode) "Cập nhật hóa đơn" else "Lưu hóa đơn",
+                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                )
+              }
+            }
+          }
+        }
       },
       modifier = Modifier.fillMaxSize()
     ) { paddingValues ->
       LazyColumn(
-        modifier = Modifier.padding(paddingValues).fillMaxSize(),
-        contentPadding = PaddingValues(Dimens.SpacingM),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
+        modifier = Modifier
+          .padding(paddingValues)
+          .fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
       ) {
 
         // --- Error Banner ---
@@ -301,9 +487,10 @@ fun AddBillScreen(
           ) {
             Card(
               colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-              modifier = Modifier.fillMaxWidth()
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(16.dp)
             ) {
-              Row(Modifier.padding(Dimens.SpacingM), verticalAlignment = Alignment.CenterVertically) {
+              Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.width(Dimens.SpacingS))
                 Text(
@@ -316,409 +503,696 @@ fun AddBillScreen(
           }
         }
 
-        // --- Total Amount (Premium Header) ---
+        // ==========================================
+        // 1. AMOUNT & MATH CARD
+        // ==========================================
         item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            Card(
-              shape = RoundedCornerShape(24.dp),
-              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-              modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.SpacingS)
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cardBg,
+            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(
+              horizontalAlignment = Alignment.CenterHorizontally,
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 18.dp, horizontal = 16.dp)
             ) {
-              Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.SpacingL, horizontal = Dimens.SpacingM)
+              // Top label
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
               ) {
-                // Currency Chips Selector Row
-                Row(
-                  horizontalArrangement = Arrangement.spacedBy(8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier = Modifier.padding(bottom = Dimens.SpacingS)
-                ) {
-                  listOf("VND", "USD", "EUR", "SGD").forEach { curr ->
-                    val isSelected = selectedCurrency == curr
-                    FilterChip(
-                      selected = isSelected,
-                      onClick = { selectedCurrency = curr; totalAmountText = "" },
-                      label = { Text(curr) },
-                      colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                      )
-                    )
-                  }
-                }
-
-                Text(
-                  "Tổng số tiền",
-                  style = MaterialTheme.typography.labelLarge,
-                  color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                Icon(
+                  Icons.Rounded.Payments,
+                  contentDescription = null,
+                  tint = secondaryTextColor,
+                  modifier = Modifier.size(16.dp)
                 )
-                Spacer(Modifier.height(Dimens.SpacingXS))
-                // Auto-scaling amount input
-                val hasMathInput = totalAmountText.any { it == '+' || it == '*' || it == '/' || it.equals('k', ignoreCase = true) }
-                val liveAmtFormatted = remember(totalAmountText) {
-                  val raw = totalAmountText.replace(",", "").toLongOrNull()
-                  if (raw != null && !hasMathInput) String.format(java.util.Locale.US, "%,d", raw) else null
-                }
-                val amountFontSize = when {
-                  totalAmountText.length > 14 -> 28.sp
-                  totalAmountText.length > 10 -> 36.sp
-                  else -> 52.sp
-                }
-                Box(
+                Text(
+                  text = "SỐ TIỀN",
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                  ),
+                  color = secondaryTextColor
+                )
+              }
+
+              Spacer(Modifier.height(8.dp))
+
+              // Math Calculation preview badge (if typed math expression)
+              val liveEvaluated = remember(totalAmountText) { evaluateMathExpression(totalAmountText) }
+              val hasMath = totalAmountText.any { it == '+' || it == '-' || it == '*' || it == '/' || it.equals('k', ignoreCase = true) }
+
+              if (hasMath && liveEvaluated != null) {
+                Surface(
+                  shape = CircleShape,
+                  color = surfaceContainer,
                   modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { },
-                  contentAlignment = Alignment.Center
-                ) {
-                  if (totalAmountText.isEmpty()) {
-                    Text(
-                      "0",
-                      fontSize = amountFontSize,
-                      fontWeight = FontWeight.Bold,
-                      textAlign = TextAlign.Center,
-                      color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f)
-                    )
-                  }
-                  androidx.compose.foundation.text.BasicTextField(
-                    value = totalAmountText,
-                    onValueChange = { input ->
-                      val validChars = input.filter { it.isDigit() || it == '+' || it == '-' || it == '*' || it == '/' || it == '.' || it == ',' || it == 'k' || it == 'K' || it == ' ' }
-                      totalAmountText = validChars
-                    },
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                      fontSize = amountFontSize,
-                      fontWeight = FontWeight.Bold,
-                      textAlign = TextAlign.Center,
-                      color = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    visualTransformation = remember { ThousandSeparatorVisualTransformation('.') },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    decorationBox = { innerTextField ->
-                      Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxWidth()
-                      ) {
-                        innerTextField()
+                    .clip(CircleShape)
+                    .clickable {
+                      totalAmountText = if (selectedCurrency == "VND") {
+                        String.format(Locale.US, "%,d", liveEvaluated.toLong())
+                      } else {
+                        String.format(Locale.US, "%.2f", liveEvaluated)
                       }
                     }
-                  )
-                }
-
-                // Live calculation preview badge
-                val liveEvaluated = remember(totalAmountText) { evaluateMathExpression(totalAmountText) }
-                val hasMath = totalAmountText.any { it == '+' || it == '-' || it == '*' || it == '/' || it.equals('k', ignoreCase = true) }
-                if (hasMath && liveEvaluated != null) {
-                  Spacer(Modifier.height(Dimens.SpacingXS))
+                ) {
                   Row(
-                    modifier = Modifier
-                      .clip(RoundedCornerShape(8.dp))
-                      .background(MaterialTheme.colorScheme.primaryContainer)
-                      .clickable {
-                        totalAmountText = if (selectedCurrency == "VND") String.format(Locale.US, "%,d", liveEvaluated.toLong()) else String.format(Locale.US, "%.2f", liveEvaluated)
-                      }
-                      .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                   ) {
                     Icon(
                       Icons.Rounded.Calculate,
                       contentDescription = null,
-                      tint = MaterialTheme.colorScheme.primary,
+                      tint = primaryColor,
+                      modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                      text = totalAmountText,
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                      color = secondaryTextColor
+                    )
+                    Text(
+                      text = "= " + if (selectedCurrency == "VND") String.format(Locale.US, "%,d", liveEvaluated.toLong()) else String.format(Locale.US, "%.2f", liveEvaluated),
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                      color = primaryColor
+                    )
+                  }
+                }
+                Spacer(Modifier.height(8.dp))
+              }
+
+              // Large Amount Display & Input
+              val amountFontSize = when {
+                totalAmountText.length > 14 -> 28.sp
+                totalAmountText.length > 10 -> 34.sp
+                else -> 42.sp
+              }
+
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                BasicTextField(
+                  value = totalAmountText,
+                  onValueChange = { input ->
+                    val validChars = input.filter {
+                      it.isDigit() || it == '+' || it == '-' || it == '*' || it == '/' || it == '.' || it == ',' || it == 'k' || it == 'K' || it == ' '
+                    }
+                    totalAmountText = validChars
+                  },
+                  textStyle = TextStyle(
+                    fontSize = amountFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    color = primaryColor
+                  ),
+                  cursorBrush = SolidColor(primaryColor),
+                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                  visualTransformation = remember { ThousandSeparatorVisualTransformation('.') },
+                  singleLine = true,
+                  modifier = Modifier.widthIn(min = 60.dp, max = 280.dp),
+                  decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.Center) {
+                      if (totalAmountText.isEmpty()) {
+                        Text(
+                          text = "0",
+                          fontSize = amountFontSize,
+                          fontWeight = FontWeight.SemiBold,
+                          color = primaryColor.copy(alpha = 0.25f),
+                          textAlign = TextAlign.Center
+                        )
+                      }
+                      innerTextField()
+                    }
+                  }
+                )
+
+                Spacer(Modifier.width(6.dp))
+
+                val currencySymbol = when (selectedCurrency) {
+                  "USD" -> "$"
+                  "EUR" -> "€"
+                  "SGD" -> "S$"
+                  else -> "₫"
+                }
+                Text(
+                  text = currencySymbol,
+                  fontSize = 24.sp,
+                  fontWeight = FontWeight.Medium,
+                  color = primaryColor
+                )
+              }
+
+              Spacer(Modifier.height(10.dp))
+
+              // SLEEK COMPACT CURRENCY SELECTOR (Opens Currency Modal Bottom Sheet)
+              Surface(
+                onClick = { showCurrencySheet = true },
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD3D8DC)),
+                shadowElevation = 0.5.dp,
+                modifier = Modifier.clip(RoundedCornerShape(20.dp))
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                  val symbol = when (selectedCurrency) {
+                    "USD" -> "$"
+                    "EUR" -> "€"
+                    "SGD" -> "S$"
+                    else -> "₫"
+                  }
+                  Text(
+                    text = "$selectedCurrency ($symbol)",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    color = primaryColor
+                  )
+                  Icon(
+                    Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = "Chọn loại tiền tệ",
+                    tint = primaryColor,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
+              }
+
+              // Exchange Rate indicator if foreign currency
+              if (selectedCurrency != "VND") {
+                Spacer(Modifier.height(8.dp))
+                val totalNum = totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
+                val rateNum = exchangeRateText.toDoubleOrNull() ?: 1.0
+                val vndEquivalent = totalNum * rateNum
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp),
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showExchangeRateDialog = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                  Icon(
+                    Icons.Rounded.CurrencyExchange,
+                    contentDescription = null,
+                    tint = secondaryTextColor,
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Text(
+                    text = "≈ ${String.format(Locale.US, "%,.0f", vndEquivalent)} ₫ (1 $selectedCurrency = ${String.format(Locale.US, "%,.0f", rateNum)} ₫)",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = secondaryTextColor
+                  )
+                  Icon(
+                    Icons.Rounded.Edit,
+                    contentDescription = "Sửa tỷ giá",
+                    tint = secondaryTextColor,
+                    modifier = Modifier.size(12.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        // ==========================================
+        // 2. UNIFIED BILL INFORMATION FORM
+        // (Expense Name, Category Carousel, Payer Selector. Date is removed per Requirement 3)
+        // ==========================================
+        item {
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cardBg,
+            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+
+              // Expense Name Field
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(surfaceContainer),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Icon(
+                    Icons.Rounded.EditNote,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(22.dp)
+                  )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Tên hóa đơn (Ăn tối, Taxi...)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = secondaryTextColor
+                  )
+                  Spacer(Modifier.height(2.dp))
+                  BasicTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    textStyle = TextStyle(
+                      fontSize = 15.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = primaryColor
+                    ),
+                    singleLine = true,
+                    cursorBrush = SolidColor(primaryColor),
+                    decorationBox = { innerTextField ->
+                      if (description.isEmpty()) {
+                        Text(
+                          "Nhập tên hóa đơn...",
+                          style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.Normal
+                          )
+                        )
+                      }
+                      innerTextField()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                  )
+                }
+
+                if (description.isNotEmpty()) {
+                  IconButton(
+                    onClick = { description = "" },
+                    modifier = Modifier.size(28.dp)
+                  ) {
+                    Icon(
+                      Icons.Rounded.Cancel,
+                      contentDescription = "Xóa",
+                      tint = MaterialTheme.colorScheme.outlineVariant,
                       modifier = Modifier.size(18.dp)
                     )
-                    Text(
-                      text = "= ${String.format(Locale.US, if (selectedCurrency == "VND") "%,d" else "%.2f", if (selectedCurrency == "VND") liveEvaluated.toLong() else liveEvaluated)} $selectedCurrency",
-                      style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                      color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                      text = "(Chạm để áp dụng)",
-                      style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
                   }
-                }
-
-                if (selectedCurrency != "VND") {
-                  Spacer(Modifier.height(Dimens.SpacingS))
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.SpacingM)
-                  ) {
-                    Text("Tỷ giá quy đổi (1 $selectedCurrency = ... VND)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-                    OutlinedTextField(
-                      value = exchangeRateText,
-                      onValueChange = { exchangeRateText = it },
-                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                      singleLine = true,
-                      modifier = Modifier.width(100.dp).height(48.dp),
-                      shape = RoundedCornerShape(8.dp),
-                      textStyle = MaterialTheme.typography.bodySmall
-                    )
-                  }
-                  
-                  val total = totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
-                  val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
-                  val vndEquivalent = total * rate
-                  Spacer(Modifier.height(4.dp))
-                  Text(
-                    text = "Quy đổi: ≈ ${String.format(Locale.US, "%,.0f", vndEquivalent)}đ",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                  )
                 }
               }
-            }
-          }
-        }
 
-        // --- Description ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            TextField(
-              value = description,
-              onValueChange = { description = it },
-              label = { Text("Tên hóa đơn (Ăn tối, Taxi...)") },
-              modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(16.dp)),
-              leadingIcon = { Icon(Icons.Rounded.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-              shape = RoundedCornerShape(16.dp),
-              colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-              ),
-              singleLine = true
-            )
-          }
-        }
+              // Category Picker Carousel
+              val quickCategories = remember(selectedCategory) {
+                val defaults = listOf(
+                  BillCategory.FOOD,
+                  BillCategory.TRANSPORT,
+                  BillCategory.SHOPPING,
+                  BillCategory.ENTERTAINMENT,
+                  BillCategory.BILLS
+                )
+                val current = BillCategory.fromKey(selectedCategory)
+                if (current !in defaults) {
+                  listOf(current) + defaults.take(4)
+                } else {
+                  defaults
+                }
+              }
 
-        // --- Category Picker ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay((1.5 * Motion.StaggerDelay).toLong()); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-              com.example.splitbill.ui.components.CategoryQuickPicker(
-                selectedCategory = com.example.splitbill.data.model.BillCategory.fromKey(selectedCategory),
-                onCategorySelected = { selectedCategory = it.key },
-                onShowAllCategories = { showCategoryPicker = true }
-              )
-            }
-          }
-        }
+              LazyRow(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 14.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                items(quickCategories, key = { it.key }) { cat ->
+                  val isSelected = cat.key == selectedCategory
+                  Surface(
+                    onClick = { selectedCategory = cat.key },
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isSelected) primaryColor else Color(0xFFF1F3F5),
+                    border = androidx.compose.foundation.BorderStroke(
+                      width = 1.dp,
+                      color = if (isSelected) primaryColor else Color(0xFFD3D8DC)
+                    ),
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    ) {
+                      Icon(
+                        imageVector = cat.icon,
+                        contentDescription = cat.displayName,
+                        tint = if (isSelected) Color.White else cat.iconColor,
+                        modifier = Modifier.size(16.dp)
+                      )
+                      Text(
+                        text = cat.displayName,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                          fontWeight = FontWeight.SemiBold,
+                          fontSize = 13.sp
+                        ),
+                        color = if (isSelected) Color.White else Color(0xFF111827)
+                      )
+                    }
+                  }
+                }
 
-        // --- Payer Dropdown ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(2 * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            ExposedDropdownMenuBox(
-              expanded = payerDropdownExpanded,
-              onExpandedChange = { payerDropdownExpanded = !payerDropdownExpanded }
-            ) {
-              TextField(
-                value = members.find { it.userId == selectedPayerId }?.username ?: "Chọn người trả",
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).shadow(4.dp, RoundedCornerShape(16.dp)),
-                label = { Text("Ai là người trả tiền?") },
-                shape = RoundedCornerShape(16.dp),
-                colors = TextFieldDefaults.colors(
-                  focusedIndicatorColor = Color.Transparent,
-                  unfocusedIndicatorColor = Color.Transparent,
-                  focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                  unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(payerDropdownExpanded) },
-                leadingIcon = {
-                  val selectedPayer = members.find { it.userId == selectedPayerId }
+                item {
+                  Surface(
+                    onClick = { showCategoryPicker = true },
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF1F3F5),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD3D8DC)),
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(6.dp),
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    ) {
+                      Icon(
+                        Icons.Rounded.MoreHoriz,
+                        contentDescription = "Khác",
+                        tint = Color(0xFF111827),
+                        modifier = Modifier.size(16.dp)
+                      )
+                      Text(
+                        text = "Khác...",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                          fontWeight = FontWeight.SemiBold,
+                          fontSize = 13.sp
+                        ),
+                        color = Color(0xFF111827)
+                      )
+                    }
+                  }
+                }
+              }
+
+              Spacer(Modifier.height(8.dp))
+              HorizontalDivider(modifier = Modifier.padding(horizontal = 14.dp), color = borderColor, thickness = 1.dp)
+
+              // Payer Selector Row
+              val selectedPayer = members.find { it.userId == selectedPayerId } ?: members.firstOrNull()
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { showPayerSheet = true }
+                  .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                // Avatar with Check badge
+                Box(modifier = Modifier.size(42.dp)) {
                   if (selectedPayer != null && !selectedPayer.avatarUrl.isNullOrBlank()) {
                     val avatarFullUrl = remember(selectedPayer.avatarUrl) {
-                      if (selectedPayer.avatarUrl.startsWith("http")) selectedPayer.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (selectedPayer.avatarUrl.startsWith("/")) "" else "/"}${selectedPayer.avatarUrl}"
+                      if (selectedPayer.avatarUrl.startsWith("http")) selectedPayer.avatarUrl
+                      else "${SupabaseConfig.SUPABASE_URL}${if (selectedPayer.avatarUrl.startsWith("/")) "" else "/"}${selectedPayer.avatarUrl}"
                     }
-                    coil3.compose.AsyncImage(
+                    AsyncImage(
                       model = avatarFullUrl,
                       contentDescription = selectedPayer.username,
-                      modifier = Modifier.size(24.dp).clip(CircleShape),
-                      contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                      modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape),
+                      contentScale = ContentScale.Crop
                     )
                   } else {
-                    Icon(Icons.Rounded.Wallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    GradientAvatar(name = selectedPayer?.username ?: "P", size = 42.dp)
+                  }
+
+                  Box(
+                    modifier = Modifier
+                      .size(16.dp)
+                      .align(Alignment.BottomEnd)
+                      .background(primaryColor, CircleShape)
+                      .border(1.5.dp, cardBg, CircleShape),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Icon(
+                      Icons.Rounded.Check,
+                      contentDescription = null,
+                      tint = Color.White,
+                      modifier = Modifier.size(10.dp)
+                    )
                   }
                 }
+
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = "Ai là người trả tiền?",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = secondaryTextColor
+                  )
+                  Spacer(Modifier.height(2.dp))
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    val isYou = selectedPayer?.userId == currentUserId
+                    Text(
+                      text = if (isYou) "Bạn (${selectedPayer?.username ?: ""})" else (selectedPayer?.username ?: "Chọn người trả"),
+                      style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                      color = primaryColor,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                    )
+                    Surface(
+                      shape = RoundedCornerShape(12.dp),
+                      color = primaryColor.copy(alpha = 0.08f)
+                    ) {
+                      Text(
+                        text = "Người trả",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                        color = primaryColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                      )
+                    }
+                  }
+                }
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                  Text(
+                    text = "Đổi",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = secondaryTextColor
+                  )
+                  Icon(
+                    Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.size(20.dp)
+                  )
+                }
+              }
+
+              // REQUIREMENT 3: Date selector is completely removed per user request.
+            }
+          }
+        }
+
+        // ==========================================
+        // 3. SPLIT METHOD & CALCULATION SECTION
+        // (Segmented Modes, Horizontal Avatar Chips, Calculation List)
+        // ==========================================
+        item {
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cardBg,
+            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+              // Section Header
+              Text(
+                text = "PHƯƠNG THỨC CHIA",
+                style = MaterialTheme.typography.labelSmall.copy(
+                  fontWeight = FontWeight.Bold,
+                  letterSpacing = 1.sp
+                ),
+                color = secondaryTextColor
               )
-              ExposedDropdownMenu(
-                expanded = payerDropdownExpanded,
-                onDismissRequest = { payerDropdownExpanded = false }
+              Text(
+                text = "Cách chia tiền",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = primaryColor
+              )
+
+              Spacer(Modifier.height(12.dp))
+
+              // Segmented control (4 modes: Đều, Tùy chỉnh, %, Phần)
+              Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = surfaceContainer,
+                modifier = Modifier.fillMaxWidth()
               ) {
-                members.forEach { member ->
-                  DropdownMenuItem(
-                    text = { Text(member.username, fontWeight = FontWeight.SemiBold) },
-                    onClick = {
-                      selectedPayerId = member.userId
-                      payerDropdownExpanded = false
-                    },
-                    leadingIcon = {
-                      if (!member.avatarUrl.isNullOrBlank()) {
-                        val avatarFullUrl = remember(member.avatarUrl) {
-                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
-                        }
-                        coil3.compose.AsyncImage(
-                          model = avatarFullUrl,
-                          contentDescription = member.username,
-                          modifier = Modifier.size(24.dp).clip(CircleShape),
-                          contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(3.dp),
+                  horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                  val modes = listOf(
+                    SplitMode.EQUAL to "Đều",
+                    SplitMode.CUSTOM to "Tùy chỉnh",
+                    SplitMode.PERCENTAGE to "%",
+                    SplitMode.SHARES to "Phần"
+                  )
+                  modes.forEach { (mode, label) ->
+                    val isSelected = splitMode == mode
+                    Surface(
+                      onClick = { splitMode = mode },
+                      shape = RoundedCornerShape(20.dp),
+                      color = if (isSelected) primaryColor else Color.Transparent,
+                      modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                    ) {
+                      Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                      ) {
+                        Text(
+                          text = label,
+                          style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                            fontSize = 13.sp
+                          ),
+                          color = if (isSelected) Color.White else Color(0xFF111827)
                         )
-                      } else {
-                        com.example.splitbill.ui.components.GradientAvatar(name = member.username, size = 24.dp)
                       }
                     }
-                  )
+                  }
                 }
               }
-            }
-          }
-        }
 
-        // --- Split Mode Toggle ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(3 * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            Column {
-              Spacer(Modifier.height(Dimens.SpacingS))
-              Text("Phương thức chia", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-              Spacer(Modifier.height(Dimens.SpacingS))
-              SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                  selected = splitMode == SplitMode.EQUAL,
-                  onClick = { splitMode = SplitMode.EQUAL },
-                  shape = SegmentedButtonDefaults.itemShape(index = 0, count = 4),
-                  label = { Text("Đều", fontWeight = FontWeight.Bold) }
-                )
-                SegmentedButton(
-                  selected = splitMode == SplitMode.CUSTOM,
-                  onClick = { splitMode = SplitMode.CUSTOM },
-                  shape = SegmentedButtonDefaults.itemShape(index = 1, count = 4),
-                  label = { Text("Tùy chỉnh", fontWeight = FontWeight.Bold) }
-                )
-                SegmentedButton(
-                  selected = splitMode == SplitMode.PERCENTAGE,
-                  onClick = { splitMode = SplitMode.PERCENTAGE },
-                  shape = SegmentedButtonDefaults.itemShape(index = 2, count = 4),
-                  label = { Text("%", fontWeight = FontWeight.Bold) }
-                )
-                SegmentedButton(
-                  selected = splitMode == SplitMode.SHARES,
-                  onClick = { splitMode = SplitMode.SHARES },
-                  shape = SegmentedButtonDefaults.itemShape(index = 3, count = 4),
-                  label = { Text("Phần", fontWeight = FontWeight.Bold) }
+              // Percentage warning if invalid
+              if (splitMode == SplitMode.PERCENTAGE && percentageWarning) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                  text = "Tổng phần trăm hiện tại là ${String.format(Locale.US, "%.1f", sumPercentages)}% (phải bằng 100%)",
+                  color = MaterialTheme.colorScheme.error,
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                 )
               }
-              if (splitMode == SplitMode.PERCENTAGE) {
-                val sumPercentages = members.sumOf { splitPercentages[it.userId]?.toDoubleOrNull() ?: 0.0 }
-                if (java.lang.Math.abs(sumPercentages - 100.0) > 0.1) {
-                  Text(
-                    text = "Tổng phần trăm hiện tại là ${String.format(java.util.Locale.US, "%.1f", sumPercentages)}% (phải bằng 100%)",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = Dimens.SpacingS)
-                  )
-                }
-              }
-            }
-          }
-        }
 
-        // --- Quick Avatar Chips Participant Selector ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay((3.5 * Motion.StaggerDelay).toLong()); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.slideUp) {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = Dimens.SpacingM)) {
+              // Custom amount warning if invalid
+              if (splitMode == SplitMode.CUSTOM && customMismatch) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                  text = "Tổng chia (${String.format(Locale.US, "%,d", customSum.toLong())} $selectedCurrency) chưa khớp với tổng hóa đơn (${String.format(Locale.US, "%,d", parsedTotal.toLong())} $selectedCurrency)",
+                  color = MaterialTheme.colorScheme.error,
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                )
+              }
+
+              Spacer(Modifier.height(16.dp))
+
+              // Horizontal Participant Selector
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
+                val activeCount = activeMemberIds.values.count { it }
                 Text(
-                  "Người tham gia (${activeMemberIds.values.count { it }}/${members.size})",
-                  style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                  text = "Người tham gia ($activeCount/${members.size})",
+                  style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                  color = primaryColor
                 )
+
+                val allActive = members.all { activeMemberIds[it.userId] != false }
                 TextButton(
                   onClick = {
-                    val allActive = members.all { activeMemberIds[it.userId] != false }
                     members.forEach { m -> activeMemberIds[m.userId] = !allActive }
-                  }
+                  },
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                  val allActive = members.all { activeMemberIds[it.userId] != false }
-                  Text(if (allActive) "Bỏ chọn tất cả" else "Chọn tất cả", style = MaterialTheme.typography.labelMedium)
+                  Text(
+                    text = if (allActive) "Bỏ chọn tất cả" else "Chọn tất cả",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = primaryColor
+                  )
                 }
               }
-              Spacer(Modifier.height(Dimens.SpacingXS))
+
+              Spacer(Modifier.height(6.dp))
+
               LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM),
-                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 4.dp),
                 modifier = Modifier.fillMaxWidth()
               ) {
                 items(members, key = { it.userId }) { member ->
                   val isSelected = activeMemberIds[member.userId] != false
+                  val isYou = member.userId == currentUserId
+
                   Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                       .clip(RoundedCornerShape(12.dp))
-                      .clickable {
-                        activeMemberIds[member.userId] = !isSelected
-                      }
-                      .padding(horizontal = 4.dp, vertical = 6.dp)
+                      .clickable { activeMemberIds[member.userId] = !isSelected }
+                      .padding(2.dp)
                   ) {
                     Box(
-                      modifier = Modifier.size(52.dp),
+                      modifier = Modifier.size(50.dp),
                       contentAlignment = Alignment.Center
                     ) {
+                      val avatarModifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .then(
+                          if (isSelected) Modifier.border(2.dp, primaryColor, CircleShape)
+                          else Modifier
+                        )
+                        .graphicsLayer(alpha = if (isSelected) 1f else 0.35f)
+
                       if (!member.avatarUrl.isNullOrBlank()) {
                         val avatarFullUrl = remember(member.avatarUrl) {
-                          if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                          if (member.avatarUrl.startsWith("http")) member.avatarUrl
+                          else "${SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
                         }
-                        coil3.compose.AsyncImage(
+                        AsyncImage(
                           model = avatarFullUrl,
                           contentDescription = member.username,
-                          modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .graphicsLayer(alpha = if (isSelected) 1f else 0.35f),
-                          contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                          modifier = avatarModifier,
+                          contentScale = ContentScale.Crop
                         )
                       } else {
-                        Box(modifier = Modifier.graphicsLayer(alpha = if (isSelected) 1f else 0.35f)) {
-                          com.example.splitbill.ui.components.GradientAvatar(name = member.username, size = 48.dp)
+                        Box(modifier = avatarModifier) {
+                          GradientAvatar(name = member.username, size = 46.dp)
                         }
                       }
 
                       if (isSelected) {
                         Box(
                           modifier = Modifier
-                            .size(20.dp)
+                            .size(16.dp)
                             .align(Alignment.BottomEnd)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                            .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                            .background(primaryColor, CircleShape)
+                            .border(1.5.dp, cardBg, CircleShape),
                           contentAlignment = Alignment.Center
                         ) {
                           Icon(
                             Icons.Rounded.Check,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(14.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(10.dp)
                           )
                         }
                       }
@@ -727,263 +1201,466 @@ fun AddBillScreen(
                     Spacer(Modifier.height(4.dp))
 
                     Text(
-                      text = member.username,
-                      style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                      text = if (isYou) "Bạn" else member.username,
+                      style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 11.sp
                       ),
-                      color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                      color = if (isSelected) primaryColor else secondaryTextColor.copy(alpha = 0.6f),
                       maxLines = 1,
-                      overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                      modifier = Modifier.widthIn(max = 68.dp),
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.widthIn(max = 56.dp),
                       textAlign = TextAlign.Center
                     )
                   }
                 }
               }
-            }
-          }
-        }
 
-        // --- Split Inputs per member ---
-        item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(4 * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = fadeIn()) {
-            Spacer(Modifier.height(Dimens.SpacingXS))
-          }
-        }
-        
-        itemsIndexed(members) { index, member ->
-          val isParticipating = activeMemberIds[member.userId] != false
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay((5 + index) * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(index)) {
-            SplitBillCard(
-              modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-              containerColor = if (isParticipating && splitAmounts[member.userId]?.isNotEmpty() == true) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-            ) {
-              Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingM)
-              ) {
-                if (!member.avatarUrl.isNullOrBlank()) {
-                  val avatarFullUrl = remember(member.avatarUrl) {
-                    if (member.avatarUrl.startsWith("http")) member.avatarUrl else "${com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
-                  }
-                  coil3.compose.AsyncImage(
-                    model = avatarFullUrl,
-                    contentDescription = member.username,
-                    modifier = Modifier.size(40.dp).clip(CircleShape).graphicsLayer(alpha = if (isParticipating) 1f else 0.4f),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                  )
-                } else {
-                  Box(modifier = Modifier.graphicsLayer(alpha = if (isParticipating) 1f else 0.4f)) {
-                    com.example.splitbill.ui.components.GradientAvatar(name = member.username)
-                  }
-                }
-                Text(
-                  member.username,
-                  style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isParticipating) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                  ),
-                  modifier = Modifier.weight(1f)
-                )
-                if (!isParticipating) {
-                  Text(
-                    text = "Không tham gia",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                  )
-                } else {
-                  when (splitMode) {
-                    SplitMode.EQUAL -> {
-                      Text(
-                        text = (splitAmounts[member.userId] ?: "0") + selectedCurrency,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                      )
-                    }
-                    SplitMode.CUSTOM -> {
-                      OutlinedTextField(
-                        value = splitAmounts[member.userId] ?: "",
-                        onValueChange = { input -> 
-                          if (selectedCurrency == "VND") {
-                            val clean = input.filter { it.isDigit() }
-                            if (clean.isNotEmpty()) {
-                              try {
-                                splitAmounts[member.userId] = String.format(Locale.US, "%,d", clean.toLong())
-                              } catch (e: Exception) { }
-                            } else {
-                              splitAmounts[member.userId] = ""
-                            }
-                          } else {
-                            if (input.isEmpty() || input.all { it.isDigit() || it == '.' }) {
-                              if (input.count { it == '.' } <= 1) {
-                                splitAmounts[member.userId] = input
-                              }
+              Spacer(Modifier.height(14.dp))
+
+              // Per-member Split Calculation List
+              val activeCount = activeMemberIds.values.count { it }
+              Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                members.forEach { member ->
+                  val isParticipating = activeMemberIds[member.userId] != false
+                  val isYou = member.userId == currentUserId
+
+                  Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                  ) {
+                    Row(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                      // Left: Name & fraction badge
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                      ) {
+                        Text(
+                          text = if (isYou) "Bạn (${member.username})" else member.username,
+                          style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = if (isParticipating) FontWeight.SemiBold else FontWeight.Normal
+                          ),
+                          color = if (isParticipating) primaryColor else secondaryTextColor.copy(alpha = 0.5f),
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (isParticipating) {
+                          val fractionLabel = when (splitMode) {
+                            SplitMode.EQUAL -> if (activeCount > 0) "1/$activeCount phần" else ""
+                            SplitMode.PERCENTAGE -> "${splitPercentages[member.userId] ?: "0"}%"
+                            SplitMode.SHARES -> "${splitShares[member.userId] ?: "1"} phần"
+                            SplitMode.CUSTOM -> "Tùy chỉnh"
+                          }
+                          if (fractionLabel.isNotEmpty()) {
+                            Surface(
+                              shape = RoundedCornerShape(6.dp),
+                              color = Color(0xFFE2E6E9),
+                              border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFC8CED3))
+                            ) {
+                              Text(
+                                text = fractionLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                                color = Color(0xFF111827),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                              )
                             }
                           }
-                        },
-                        modifier = Modifier.width(120.dp),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        suffix = { Text(selectedCurrency) }
-                      )
-                    }
-                    SplitMode.PERCENTAGE -> {
-                      Column(horizontalAlignment = Alignment.End) {
-                        OutlinedTextField(
-                          value = splitPercentages[member.userId] ?: "",
-                          onValueChange = { input -> 
-                            val clean = input.filter { it.isDigit() || it == '.' }
-                            if (clean.count { it == '.' } <= 1) {
-                              splitPercentages[member.userId] = clean
-                            }
-                          },
-                          modifier = Modifier.width(120.dp),
-                          textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End, fontWeight = FontWeight.Bold),
-                          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                          singleLine = true,
-                          shape = RoundedCornerShape(12.dp),
-                          suffix = { Text("%") }
-                        )
-                        val amt = splitAmounts[member.userId] ?: ""
-                        if (amt.isNotEmpty()) {
+                        } else {
                           Text(
-                            text = "${amt}${selectedCurrency}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Không tham gia",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                            color = Color(0xFF73787B)
                           )
                         }
                       }
-                    }
-                    SplitMode.SHARES -> {
-                      Column(horizontalAlignment = Alignment.End) {
-                        Row(
-                          verticalAlignment = Alignment.CenterVertically,
-                          horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                          IconButton(
-                            onClick = {
-                              val current = splitShares[member.userId]?.toIntOrNull() ?: 1
-                              if (current > 1) {
-                                splitShares[member.userId] = (current - 1).toString()
+
+                      // Right: Amount or Edit control
+                      if (!isParticipating) {
+                        Text(
+                          text = "0 $selectedCurrency",
+                          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                          color = Color(0xFF73787B)
+                        )
+                      } else {
+                        when (splitMode) {
+                          SplitMode.EQUAL -> {
+                            val amt = splitAmounts[member.userId] ?: "0"
+                            Text(
+                              text = "$amt $selectedCurrency",
+                              style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                              color = primaryColor
+                            )
+                          }
+                          SplitMode.CUSTOM -> {
+                            OutlinedTextField(
+                              value = splitAmounts[member.userId] ?: "",
+                              onValueChange = { input ->
+                                if (selectedCurrency == "VND") {
+                                  val clean = input.filter { it.isDigit() }
+                                  if (clean.isNotEmpty()) {
+                                    try {
+                                      splitAmounts[member.userId] = String.format(Locale.US, "%,d", clean.toLong())
+                                    } catch (_: Exception) { }
+                                  } else {
+                                    splitAmounts[member.userId] = ""
+                                  }
+                                } else {
+                                  if (input.isEmpty() || input.all { it.isDigit() || it == '.' }) {
+                                    if (input.count { it == '.' } <= 1) {
+                                      splitAmounts[member.userId] = input
+                                    }
+                                  }
+                                }
+                              },
+                              modifier = Modifier.width(130.dp),
+                              textStyle = TextStyle(
+                                color = primaryColor,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.End
+                              ),
+                              colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = primaryColor,
+                                unfocusedTextColor = primaryColor,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = primaryColor,
+                                unfocusedBorderColor = Color(0xFFBDC4CA)
+                              ),
+                              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                              singleLine = true,
+                              shape = RoundedCornerShape(10.dp),
+                              suffix = { Text(selectedCurrency, color = primaryColor, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                            )
+                          }
+                          SplitMode.PERCENTAGE -> {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              OutlinedTextField(
+                                value = splitPercentages[member.userId] ?: "",
+                                onValueChange = { input ->
+                                  val clean = input.filter { it.isDigit() || it == '.' }
+                                  if (clean.count { it == '.' } <= 1) {
+                                    splitPercentages[member.userId] = clean
+                                  }
+                                },
+                                modifier = Modifier.width(86.dp),
+                                textStyle = TextStyle(
+                                  color = primaryColor,
+                                  fontSize = 15.sp,
+                                  fontWeight = FontWeight.Bold,
+                                  textAlign = TextAlign.End
+                                ),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                  focusedTextColor = primaryColor,
+                                  unfocusedTextColor = primaryColor,
+                                  focusedContainerColor = Color.White,
+                                  unfocusedContainerColor = Color.White,
+                                  focusedBorderColor = primaryColor,
+                                  unfocusedBorderColor = Color(0xFFBDC4CA)
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                suffix = { Text("%", color = primaryColor, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                              )
+                              val amt = splitAmounts[member.userId] ?: ""
+                              if (amt.isNotEmpty()) {
+                                Text(
+                                  text = "$amt $selectedCurrency",
+                                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                  color = primaryColor
+                                )
                               }
-                            },
-                            modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                          ) {
-                            Icon(Icons.Rounded.Remove, contentDescription = "Giảm", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                            }
                           }
-                          Text(
-                            text = splitShares[member.userId] ?: "1",
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.width(20.dp),
-                            textAlign = TextAlign.Center
-                          )
-                          IconButton(
-                            onClick = {
-                              val current = splitShares[member.userId]?.toIntOrNull() ?: 1
-                              splitShares[member.userId] = (current + 1).toString()
-                            },
-                            modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                          ) {
-                            Icon(Icons.Rounded.Add, contentDescription = "Tăng", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                          SplitMode.SHARES -> {
+                            Row(
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                              // Stepper Capsule gọn gàng, tinh tế
+                              Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBDC4CA)),
+                                modifier = Modifier.height(28.dp)
+                              ) {
+                                Row(
+                                  verticalAlignment = Alignment.CenterVertically,
+                                  modifier = Modifier.padding(horizontal = 4.dp)
+                                ) {
+                                  Box(
+                                    modifier = Modifier
+                                      .size(22.dp)
+                                      .clip(CircleShape)
+                                      .clickable {
+                                        val current = splitShares[member.userId]?.toIntOrNull() ?: 1
+                                        if (current > 1) {
+                                          splitShares[member.userId] = (current - 1).toString()
+                                        }
+                                      },
+                                    contentAlignment = Alignment.Center
+                                  ) {
+                                    Icon(
+                                      Icons.Rounded.Remove,
+                                      contentDescription = "Giảm",
+                                      tint = primaryColor,
+                                      modifier = Modifier.size(14.dp)
+                                    )
+                                  }
+
+                                  Text(
+                                    text = splitShares[member.userId] ?: "1",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                      fontWeight = FontWeight.Bold,
+                                      fontSize = 13.sp
+                                    ),
+                                    color = primaryColor,
+                                    modifier = Modifier.widthIn(min = 20.dp),
+                                    textAlign = TextAlign.Center
+                                  )
+
+                                  Box(
+                                    modifier = Modifier
+                                      .size(22.dp)
+                                      .clip(CircleShape)
+                                      .clickable {
+                                        val current = splitShares[member.userId]?.toIntOrNull() ?: 1
+                                        splitShares[member.userId] = (current + 1).toString()
+                                      },
+                                    contentAlignment = Alignment.Center
+                                  ) {
+                                    Icon(
+                                      Icons.Rounded.Add,
+                                      contentDescription = "Tăng",
+                                      tint = primaryColor,
+                                      modifier = Modifier.size(14.dp)
+                                    )
+                                  }
+                                }
+                              }
+
+                              val amt = splitAmounts[member.userId] ?: ""
+                              if (amt.isNotEmpty()) {
+                                Text(
+                                  text = "$amt $selectedCurrency",
+                                  style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                  color = primaryColor
+                                )
+                              }
+                            }
                           }
-                        }
-                        val amt = splitAmounts[member.userId] ?: ""
-                        if (amt.isNotEmpty()) {
-                          Text(
-                            text = "${amt}${selectedCurrency}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                          )
                         }
                       }
                     }
                   }
                 }
               }
+
+              // REQUIREMENT 2: "Khớp số tiền (Đã phân bổ 100%)" container is REMOVED per user request!
             }
           }
         }
 
-        // --- Receipt Picker Card ---
+        // ==========================================
+        // 4. RECEIPT IMAGE & SCAN SECTION (Requirement 4)
+        // ==========================================
         item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(6 * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = Motion.staggeredSlideIn(6)) {
-            SplitBillCard(modifier = Modifier.fillMaxWidth()) {
-              Column(verticalArrangement = Arrangement.spacedBy(Dimens.SpacingM)) {
-                Text(
-                  text = "Ảnh hóa đơn".localized(),
-                  fontWeight = FontWeight.Bold,
-                  style = MaterialTheme.typography.titleMedium
-                )
-                
-                if (imageBytes != null) {
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cardBg,
+            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+              // Header with Title + "Quét hóa đơn" button
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Text(
+                    text = "Ảnh hóa đơn",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = primaryColor
+                  )
+                  val hasImage = imageBytes != null || selectedImageUri != null || existingBill?.receiptUrl != null
+                  Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = surfaceContainer
+                  ) {
+                    Text(
+                      text = if (hasImage) "1 ảnh" else "0 ảnh",
+                      style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                      color = secondaryTextColor,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                }
+
+                // "Quét hóa đơn" Action Button
+                TextButton(
+                  onClick = {
+                    Toast.makeText(
+                      context,
+                      "Tính năng Quét hóa đơn (OCR) đang được phát triển. Tạm thời bạn có thể chọn ảnh từ thư viện!",
+                      Toast.LENGTH_SHORT
+                    ).show()
+                    galleryLauncher.launch("image/*")
+                  },
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                  ) {
+                    Icon(
+                      Icons.Rounded.DocumentScanner,
+                      contentDescription = null,
+                      tint = primaryColor,
+                      modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                      text = "Quét hóa đơn",
+                      style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                      color = primaryColor
+                    )
+                  }
+                }
+              }
+
+              Spacer(Modifier.height(12.dp))
+
+              // Horizontal thumbnails row
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                // If an image is selected / existing
+                if (imageBytes != null || selectedImageUri != null || existingBill?.receiptUrl != null) {
                   Box(
                     modifier = Modifier
-                      .fillMaxWidth()
-                      .height(200.dp)
-                      .clip(RoundedCornerShape(12.dp))
-                      .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                      .size(width = 80.dp, height = 96.dp)
                   ) {
-                    coil3.compose.AsyncImage(
-                      model = selectedImageUri ?: imageBytes,
-                      contentDescription = "Receipt Preview",
-                      modifier = Modifier.fillMaxSize(),
-                      contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                    )
-                    
+                    Surface(
+                      shape = RoundedCornerShape(12.dp),
+                      color = surfaceContainer,
+                      shadowElevation = 2.dp,
+                      modifier = Modifier.fillMaxSize()
+                    ) {
+                      Box(modifier = Modifier.fillMaxSize()) {
+                        val imageModel = selectedImageUri ?: imageBytes ?: (
+                          if (existingBill?.receiptUrl?.startsWith("http") == true) existingBill.receiptUrl
+                          else "${SupabaseConfig.SUPABASE_URL}${existingBill?.receiptUrl ?: ""}"
+                        )
+                        AsyncImage(
+                          model = imageModel,
+                          contentDescription = "Hóa đơn",
+                          modifier = Modifier.fillMaxSize(),
+                          contentScale = ContentScale.Crop
+                        )
+
+                        // "Bill #1" Badge
+                        Surface(
+                          shape = RoundedCornerShape(4.dp),
+                          color = Color.Black.copy(alpha = 0.6f),
+                          modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                        ) {
+                          Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                          ) {
+                            Icon(
+                              Icons.Rounded.Receipt,
+                              contentDescription = null,
+                              tint = Color.White,
+                              modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                              text = "Bill #1",
+                              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                              color = Color.White
+                            )
+                          }
+                        }
+                      }
+                    }
+
+                    // Delete X Button
                     IconButton(
                       onClick = {
                         imageBytes = null
                         selectedImageUri = null
                       },
                       modifier = Modifier
+                        .size(24.dp)
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        .background(cardBg, CircleShape)
+                        .border(1.dp, borderColor, CircleShape)
                     ) {
-                      Icon(Icons.Rounded.Close, contentDescription = "Xóa ảnh", tint = Color.White)
+                      Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = "Xóa ảnh",
+                        tint = primaryColor,
+                        modifier = Modifier.size(14.dp)
+                      )
                     }
                   }
-                } else if (existingBill?.receiptUrl != null) {
-                  val fullUrl = if (existingBill.receiptUrl.startsWith("http")) existingBill.receiptUrl else com.example.splitbill.data.supabase.SupabaseConfig.SUPABASE_URL + existingBill.receiptUrl
-                  Box(
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .height(200.dp)
-                      .clip(RoundedCornerShape(12.dp))
-                      .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                }
+
+                // "+ Thêm ảnh" Button
+                Surface(
+                  onClick = { galleryLauncher.launch("image/*") },
+                  shape = RoundedCornerShape(12.dp),
+                  color = surfaceContainerLow,
+                  border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                  modifier = Modifier
+                    .size(width = 80.dp, height = 96.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                ) {
+                  Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize()
                   ) {
-                    coil3.compose.AsyncImage(
-                      model = fullUrl,
-                      contentDescription = "Receipt Image",
-                      modifier = Modifier.fillMaxSize(),
-                      contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    Box(
+                      modifier = Modifier
+                        .size(32.dp)
+                        .background(Color.White, CircleShape)
+                        .shadow(1.dp, CircleShape),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Icon(
+                        Icons.Rounded.AddAPhoto,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(16.dp)
+                      )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                      text = "Thêm ảnh",
+                      style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                      color = secondaryTextColor
                     )
-                  }
-                } else {
-                  OutlinedButton(
-                    onClick = { galleryLauncher.launch("image/*") },
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .height(100.dp),
-                    shape = RoundedCornerShape(12.dp)
-                  ) {
-                    Column(
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                      verticalArrangement = Arrangement.Center
-                    ) {
-                      Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(32.dp))
-                      Spacer(Modifier.height(Dimens.SpacingXS))
-                      Text("Chọn ảnh hóa đơn từ Thư viện".localized())
-                    }
                   }
                 }
               }
@@ -991,44 +1668,143 @@ fun AddBillScreen(
           }
         }
 
-        // --- Submit Button ---
         item {
-          var visible by rememberSaveable { mutableStateOf(false) }
-          LaunchedEffect(Unit) { kotlinx.coroutines.delay(7 * Motion.StaggerDelay); visible = true }
-          AnimatedVisibility(visible = visible, enter = slideInVertically(animationSpec = Motion.tweenSlow(), initialOffsetY = { it / 2 }) + fadeIn()) {
-            Column {
-              Spacer(Modifier.height(Dimens.SpacingM))
-              com.example.splitbill.ui.components.GradientButton(
-                onClick = {
-                  val total = evaluateMathExpression(totalAmountText) ?: totalAmountText.replace(",", "").toDoubleOrNull() ?: 0.0
-                  val rate = exchangeRateText.toDoubleOrNull() ?: 1.0
-                  val splits = members.mapNotNull { member ->
-                    val amount = splitAmounts[member.userId]?.replace(",", "")?.toDoubleOrNull() ?: 0.0
-                    if (amount > 0) BillSplitItem(member.userId, amount) else null
-                  }
-                  if (isEditMode) {
-                    viewModel.updateBill(existingBill!!.id, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes, selectedCategory)
-                  } else {
-                    viewModel.createBill(groupId, description, total, selectedPayerId, selectedCurrency, rate, splits, imageBytes, selectedCategory)
-                  }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = uiState !is AddBillUiState.Loading && totalAmountText.isNotBlank() && description.isNotBlank() && !percentageWarning
+          Spacer(Modifier.height(8.dp))
+        }
+      }
+    }
+
+    // --- Payer Selection Modal Bottom Sheet ---
+    if (showPayerSheet) {
+      ModalBottomSheet(
+        onDismissRequest = { showPayerSheet = false },
+        containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 32.dp)
+        ) {
+          Text(
+            text = "Ai là người trả tiền?",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = primaryColor
+          )
+          Spacer(Modifier.height(4.dp))
+          Text(
+            text = "Chọn thành viên đã thanh toán hóa đơn này",
+            style = MaterialTheme.typography.bodySmall,
+            color = secondaryTextColor
+          )
+          Spacer(Modifier.height(16.dp))
+
+          members.forEach { member ->
+            val isSelected = member.userId == selectedPayerId
+            val isYou = member.userId == currentUserId
+            Surface(
+              onClick = {
+                selectedPayerId = member.userId
+                showPayerSheet = false
+              },
+              shape = RoundedCornerShape(12.dp),
+              color = if (isSelected) primaryColor.copy(alpha = 0.08f) else Color.Transparent,
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
               ) {
-                if (uiState is AddBillUiState.Loading) {
-                  CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = Color.White)
-                } else {
-                  Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color.White)
-                  Spacer(Modifier.width(Dimens.SpacingS))
-                  Text(if (isEditMode) "Cập nhật hóa đơn" else "Lưu hóa đơn", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                  if (!member.avatarUrl.isNullOrBlank()) {
+                    val avatarFullUrl = remember(member.avatarUrl) {
+                      if (member.avatarUrl.startsWith("http")) member.avatarUrl
+                      else "${SupabaseConfig.SUPABASE_URL}${if (member.avatarUrl.startsWith("/")) "" else "/"}${member.avatarUrl}"
+                    }
+                    AsyncImage(
+                      model = avatarFullUrl,
+                      contentDescription = member.username,
+                      modifier = Modifier.size(40.dp).clip(CircleShape),
+                      contentScale = ContentScale.Crop
+                    )
+                  } else {
+                    GradientAvatar(name = member.username, size = 40.dp)
+                  }
+
+                  Column {
+                    Text(
+                      text = if (isYou) "Bạn (${member.username})" else member.username,
+                      style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                      ),
+                      color = primaryColor
+                    )
+                    if (isYou) {
+                      Text(
+                        text = "Tài khoản hiện tại",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = secondaryTextColor
+                      )
+                    }
+                  }
+                }
+
+                if (isSelected) {
+                  Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = primaryColor,
+                    modifier = Modifier.size(22.dp)
+                  )
                 }
               }
-              Spacer(Modifier.height(Dimens.SpacingXL))
             }
           }
         }
       }
+    }
+
+    // --- Exchange Rate Dialog ---
+    if (showExchangeRateDialog) {
+      var tempRate by remember { mutableStateOf(exchangeRateText) }
+      AlertDialog(
+        onDismissRequest = { showExchangeRateDialog = false },
+        title = { Text("Tỷ giá quy đổi", fontWeight = FontWeight.Bold) },
+        text = {
+          Column {
+            Text("Nhập tỷ giá (1 $selectedCurrency = ... VND):", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+              value = tempRate,
+              onValueChange = { tempRate = it },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth()
+            )
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            exchangeRateText = tempRate
+            showExchangeRateDialog = false
+          }) {
+            Text("Xác nhận", fontWeight = FontWeight.Bold, color = primaryColor)
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { showExchangeRateDialog = false }) {
+            Text("Hủy")
+          }
+        }
+      )
     }
 
     // Success Overlay Animation
@@ -1042,7 +1818,6 @@ fun AddBillScreen(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
         contentAlignment = Alignment.Center
       ) {
-        // Confetti!
         ConfettiOverlay()
 
         val scale = remember { Animatable(0f) }
@@ -1075,11 +1850,159 @@ fun AddBillScreen(
 
     // Category Picker Bottom Sheet
     if (showCategoryPicker) {
-      com.example.splitbill.ui.components.CategoryPickerBottomSheet(
-        selectedCategory = com.example.splitbill.data.model.BillCategory.fromKey(selectedCategory),
+      CategoryPickerBottomSheet(
+        selectedCategory = BillCategory.fromKey(selectedCategory),
         onCategorySelected = { selectedCategory = it.key },
         onDismiss = { showCategoryPicker = false }
       )
+    }
+
+    // Currency Picker Bottom Sheet
+    if (showCurrencySheet) {
+      ModalBottomSheet(
+        onDismissRequest = { showCurrencySheet = false },
+        containerColor = cardBg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 36.dp)
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column {
+              Text(
+                text = "Chọn loại tiền tệ",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = primaryColor
+              )
+              Spacer(Modifier.height(2.dp))
+              Text(
+                text = "Hệ thống hỗ trợ tự động quy đổi theo tỷ giá",
+                style = MaterialTheme.typography.bodySmall,
+                color = secondaryTextColor
+              )
+            }
+            IconButton(
+              onClick = { showCurrencySheet = false },
+              modifier = Modifier
+                .size(32.dp)
+                .background(Color(0xFFF1F3F5), CircleShape)
+            ) {
+              Icon(
+                Icons.Rounded.Close,
+                contentDescription = "Đóng",
+                tint = primaryColor,
+                modifier = Modifier.size(16.dp)
+              )
+            }
+          }
+
+          Spacer(Modifier.height(18.dp))
+
+          val currencyList = listOf(
+            Triple("VND", "Đồng Việt Nam (₫)", "Tiền tệ mặc định"),
+            Triple("USD", "Đô la Mỹ ($)", "Tỷ giá: 1 USD ≈ 25.400 ₫"),
+            Triple("EUR", "Đồng Euro (€)", "Tỷ giá: 1 EUR ≈ 27.500 ₫"),
+            Triple("SGD", "Đô la Singapore (S$)", "Tỷ giá: 1 SGD ≈ 19.200 ₫")
+          )
+
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            currencyList.forEach { (code, title, desc) ->
+              val isSelected = selectedCurrency == code
+              Surface(
+                onClick = {
+                  selectedCurrency = code
+                  showCurrencySheet = false
+                },
+                shape = RoundedCornerShape(16.dp),
+                color = if (isSelected) primaryColor.copy(alpha = 0.06f) else Color(0xFFF8F9FA),
+                border = androidx.compose.foundation.BorderStroke(
+                  width = if (isSelected) 1.8.dp else 1.dp,
+                  color = if (isSelected) primaryColor else Color(0xFFE2E6E9)
+                ),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                  ) {
+                    // Currency Circle Badge
+                    Box(
+                      modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                          if (isSelected) primaryColor else Color(0xFFE8ECEF),
+                          CircleShape
+                        ),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      val symbol = when (code) {
+                        "USD" -> "$"
+                        "EUR" -> "€"
+                        "SGD" -> "S$"
+                        else -> "₫"
+                      }
+                      Text(
+                        text = symbol,
+                        color = if (isSelected) Color.White else primaryColor,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                      )
+                    }
+
+                    Column {
+                      Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                      ) {
+                        Text(
+                          text = code,
+                          style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                          color = primaryColor
+                        )
+                        Text(
+                          text = "• " + title.substringAfter(" ").trim(),
+                          style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                          color = Color(0xFF111827)
+                        )
+                      }
+                      Spacer(Modifier.height(2.dp))
+                      Text(
+                        text = desc,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = secondaryTextColor
+                      )
+                    }
+                  }
+
+                  if (isSelected) {
+                    Icon(
+                      Icons.Rounded.CheckCircle,
+                      contentDescription = null,
+                      tint = primaryColor,
+                      modifier = Modifier.size(24.dp)
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -1103,7 +2026,6 @@ fun evaluateMathExpression(input: String): Double? {
       } else if (ch == '+' || ch == '-' || ch == '*' || ch == '/') {
         if (num.isNotEmpty()) {
           tokens.add(num.toString())
-          num = StringBuilder()
         }
         tokens.add(ch.toString())
       }
@@ -1143,20 +2065,20 @@ fun evaluateMathExpression(input: String): Double? {
   }
 }
 
-private fun compressReceiptImage(context: android.content.Context, uri: android.net.Uri): ByteArray? {
+private fun compressReceiptImage(context: Context, uri: Uri): ByteArray? {
   return try {
     val inputStream = context.contentResolver.openInputStream(uri) ?: return null
     val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream) ?: return null
-    
+
     val maxDim = 800
     val width = originalBitmap.width
     val height = originalBitmap.height
     val scale = Math.min(maxDim.toFloat() / width, maxDim.toFloat() / height).coerceAtMost(1.0f)
-    
+
     val scaledWidth = (width * scale).toInt()
     val scaledHeight = (height * scale).toInt()
     val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
-    
+
     val outputStream = java.io.ByteArrayOutputStream()
     scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
     outputStream.toByteArray()
@@ -1167,46 +2089,46 @@ private fun compressReceiptImage(context: android.content.Context, uri: android.
 }
 
 class ThousandSeparatorVisualTransformation(val separator: Char = '.') : androidx.compose.ui.text.input.VisualTransformation {
-    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
-        val original = text.text
-        if (original.isEmpty() || original.any { !it.isDigit() }) {
-            return androidx.compose.ui.text.input.TransformedText(text, androidx.compose.ui.text.input.OffsetMapping.Identity)
-        }
-        val formatted = java.lang.StringBuilder()
-        val length = original.length
-        for (i in 0 until length) {
-            formatted.append(original[i])
-            val remaining = length - i - 1
-            if (remaining > 0 && remaining % 3 == 0) {
-                formatted.append(separator)
-            }
-        }
-        val offsetMapping = object : androidx.compose.ui.text.input.OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int {
-                if (offset <= 0) return 0
-                if (offset >= length) return formatted.length
-                val commasBefore = (length - 1) / 3 - (length - offset - 1) / 3
-                return offset + commasBefore
-            }
-            override fun transformedToOriginal(offset: Int): Int {
-                if (offset <= 0) return 0
-                if (offset >= formatted.length) return length
-                var originalOffset = 0
-                var transformedOffset = 0
-                while (transformedOffset < offset && originalOffset < length) {
-                    transformedOffset++
-                    val remaining = length - originalOffset - 1
-                    if (remaining > 0 && remaining % 3 == 0) {
-                        transformedOffset++
-                    }
-                    originalOffset++
-                }
-                return originalOffset
-            }
-        }
-        return androidx.compose.ui.text.input.TransformedText(
-            androidx.compose.ui.text.AnnotatedString(formatted.toString()),
-            offsetMapping
-        )
+  override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+    val original = text.text
+    if (original.isEmpty() || original.any { !it.isDigit() }) {
+      return androidx.compose.ui.text.input.TransformedText(text, androidx.compose.ui.text.input.OffsetMapping.Identity)
     }
+    val formatted = StringBuilder()
+    val length = original.length
+    for (i in 0 until length) {
+      formatted.append(original[i])
+      val remaining = length - i - 1
+      if (remaining > 0 && remaining % 3 == 0) {
+        formatted.append(separator)
+      }
+    }
+    val offsetMapping = object : androidx.compose.ui.text.input.OffsetMapping {
+      override fun originalToTransformed(offset: Int): Int {
+        if (offset <= 0) return 0
+        if (offset >= length) return formatted.length
+        val commasBefore = (length - 1) / 3 - (length - offset - 1) / 3
+        return offset + commasBefore
+      }
+      override fun transformedToOriginal(offset: Int): Int {
+        if (offset <= 0) return 0
+        if (offset >= formatted.length) return length
+        var originalOffset = 0
+        var transformedOffset = 0
+        while (transformedOffset < offset && originalOffset < length) {
+          transformedOffset++
+          val remaining = length - originalOffset - 1
+          if (remaining > 0 && remaining % 3 == 0) {
+            transformedOffset++
+          }
+          originalOffset++
+        }
+        return originalOffset
+      }
+    }
+    return androidx.compose.ui.text.input.TransformedText(
+      androidx.compose.ui.text.AnnotatedString(formatted.toString()),
+      offsetMapping
+    )
+  }
 }
