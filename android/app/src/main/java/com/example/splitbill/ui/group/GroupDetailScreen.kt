@@ -93,20 +93,36 @@ fun GroupDetailScreen(
     contract = ActivityResultContracts.PickVisualMedia()
   ) { uri ->
     if (uri != null) {
-      val localPath = try {
+      val (localPath, bytes) = try {
         val inputStream = context.contentResolver.openInputStream(uri)
+        val originalBitmap = inputStream?.use { android.graphics.BitmapFactory.decodeStream(it) }
+        val compressedBytes = if (originalBitmap != null) {
+          val maxDim = 1200
+          val width = originalBitmap.width
+          val height = originalBitmap.height
+          val scale = Math.min(maxDim.toFloat() / width, maxDim.toFloat() / height).coerceAtMost(1.0f)
+          val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, (width * scale).toInt(), (height * scale).toInt(), true)
+          val bos = java.io.ByteArrayOutputStream()
+          scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+          bos.toByteArray()
+        } else null
+
         val bannerDir = java.io.File(context.filesDir, "banners").apply { mkdirs() }
         val targetFile = java.io.File(bannerDir, "banner_${state.group?.id ?: "temp"}_${System.currentTimeMillis()}.jpg")
-        inputStream?.use { input ->
-          targetFile.outputStream().use { output ->
-            input.copyTo(output)
-          }
+        if (compressedBytes != null) {
+          targetFile.writeBytes(compressedBytes)
         }
-        targetFile.toURI().toString()
+        Pair(targetFile.toURI().toString(), compressedBytes)
       } catch (_: Exception) {
-        uri.toString()
+        Pair(uri.toString(), null)
       }
+
+      // Cập nhật preview cục bộ tức thì
       viewModel.updateBanner(localPath)
+      // Đồng thời tải ảnh lên Supabase Storage để lưu trữ vĩnh viễn trên đám mây
+      if (bytes != null) {
+        viewModel.uploadBanner(bytes)
+      }
       showChangeBannerSheet = false
     }
   }

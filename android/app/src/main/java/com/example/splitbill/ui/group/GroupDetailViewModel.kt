@@ -209,6 +209,20 @@ class GroupDetailViewModel(
     }
   }
 
+  fun uploadBanner(imageBytes: ByteArray) {
+    viewModelScope.launch {
+      val result = groupRepository.uploadGroupBanner(groupId, imageBytes)
+      if (result.isSuccess) {
+        val publicUrl = result.getOrNull()
+        if (publicUrl != null) {
+          val updatedGroup = _state.value.group?.copy(bannerUrl = publicUrl)
+          _state.value = _state.value.copy(group = updatedGroup)
+          stateCache[groupId] = _state.value
+        }
+      }
+    }
+  }
+
   fun deleteBill(billId: String) {
     viewModelScope.launch {
       val result = billRepository.deleteBill(billId)
