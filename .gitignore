@@ -32,4 +32,8 @@ uploads/
 firebase-service-account.json
 **/firebase-service-account.json
 
+# Qoder IDE local data (knowledge cache, per-machine config)
+.qoder/
+.qoderignore
+
 
