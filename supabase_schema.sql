@@ -23,9 +23,19 @@ CREATE TABLE public.profiles (
     email TEXT NOT NULL,
     username TEXT NOT NULL,
     avatar_url TEXT,
+    -- Thông tin ngân hàng dùng để tạo VietQR nhận hoàn tiền
+    bank_code TEXT,
+    account_number TEXT,
+    account_name TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Bổ sung cột ngân hàng cho project đã tạo bảng từ trước (chạy an toàn nhiều lần)
+ALTER TABLE public.profiles
+    ADD COLUMN IF NOT EXISTS bank_code TEXT,
+    ADD COLUMN IF NOT EXISTS account_number TEXT,
+    ADD COLUMN IF NOT EXISTS account_name TEXT;
 
 -- Tự động đồng bộ profile khi user đăng ký qua Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()

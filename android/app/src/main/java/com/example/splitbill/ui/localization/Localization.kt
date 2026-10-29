@@ -101,7 +101,106 @@ class Translator(private val language: AppLanguage) {
       "Thông báo đẩy" to "Push notifications",
       "Bật thông báo khi có hóa đơn mới" to "Notify when new bills are added",
       "Bảo mật sinh trắc học" to "Biometric security",
-      "Sử dụng vân tay/khuôn mặt" to "Use fingerprint/face ID"
+      "Sử dụng vân tay/khuôn mặt" to "Use fingerprint/face ID",
+      "Cài Đặt" to "Settings",
+      "Tùy chỉnh trải nghiệm của bạn" to "Customize your experience",
+      "Tài khoản & Thiết bị" to "Account & Device",
+      "Đồng bộ đám mây" to "Cloud sync",
+      "Chế độ hiển thị" to "Display mode",
+      "Chuẩn" to "Standard",
+      "Nhỏ" to "Small",
+      "Lớn" to "Large",
+      "Xem trước: Bữa tối nhóm hôm qua chia đều 145.000đ cho mỗi thành viên." to
+        "Preview: Last night's group dinner split evenly at 145,000₫ per member.",
+      "Ngôn ngữ hiển thị" to "Display language",
+      "Áp dụng toàn bộ ứng dụng" to "Applies to the entire app",
+      "Thông báo" to "Notifications",
+      "Nhắc nợ lịch sự & xác nhận thanh toán tức thời" to
+        "Gentle reminders & instant payment confirmation",
+      "Bảo mật và đối soát" to "Security & reconciliation",
+      "Khóa bằng vân tay hoặc khuôn mặt" to "Lock with fingerprint or face",
+      "Tự động nhận diện thanh toán" to "Automatic payment detection",
+      "Khớp tiền hoàn từ biến động số dư ngân hàng" to
+        "Match incoming transfers from your bank balance updates",
+      "Cần quyền Notification Listener" to "Notification Listener permission required",
+      "Bảo mật thiết bị Android" to "Android device security",
+      "Thiết lập quyền" to "Grant permission",
+      "Đã bật đối soát giao dịch tự động" to "Automatic reconciliation is on",
+      "Ứng dụng đang lắng nghe thông báo hoàn tiền để tự động cập nhật khoản thu chung." to
+        "The app listens for transfer notifications to update shared expenses automatically.",
+      "Thanh toán & Chuyển khoản" to "Payments & Transfer",
+      "Đã kết nối" to "Connected",
+      "Chưa kết nối" to "Not connected",
+      "Tạo mã QR kèm đúng số tiền nợ cho bạn bè quét trả" to
+        "Create a QR with the exact amount owed for friends to scan",
+      "Thông tin ứng dụng" to "App information",
+      "Điều khoản sử dụng" to "Terms of use",
+      "Chính sách quyền riêng tư" to "Privacy policy",
+      "Phiên bản ứng dụng" to "App version",
+      "Đóng" to "Close",
+      "Đăng xuất tài khoản khỏi thiết bị này" to "Sign out of this device",
+      "Tài chính minh bạch • Tình bạn bền lâu" to "Transparent finances • Lasting friendships",
+      "Đăng xuất khỏi SplitBill?" to "Sign out of SplitBill?",
+      "Dữ liệu sổ thu chi vẫn sẽ được lưu an toàn trên đám mây." to
+        "Your ledger data stays safely backed up in the cloud.",
+      "Chọn ngôn ngữ" to "Choose language",
+      ("SplitBill cần quyền phát hiện thông báo ngân hàng khi bạn nhận tiền hoàn từ bạn bè. " +
+        "Ứng dụng cam kết hoàn toàn không đọc tin nhắn SMS hay thông tin tài khoản riêng tư.") to
+        ("SplitBill needs to detect bank notifications when you receive a refund from friends. " +
+          "The app never reads your SMS messages or private account details."),
+      ("SplitBill là công cụ hỗ trợ ghi lại và chia sẻ chi phí trong nhóm. Bạn chịu trách nhiệm về " +
+        "tính chính xác của các khoản chi đã nhập cũng như các thỏa thuận thanh toán giữa các thành viên. " +
+        "Vui lòng không sử dụng ứng dụng cho mục đích trái pháp luật.") to
+        ("SplitBill helps you record and share group expenses. You are responsible for the " +
+          "accuracy of the expenses you enter and for the payment agreements between members. " +
+          "Please do not use the app for unlawful purposes."),
+      ("SplitBill chỉ lưu những thông tin cần thiết để vận hành: tên, email, ảnh đại diện và thông tin " +
+        "ngân hàng do bạn tự nhập. Ứng dụng không đọc tin nhắn SMS hay nội dung trò chuyện cá nhân. " +
+        "Dữ liệu được lưu trữ an toàn trên đám mây và bạn có thể yêu cầu xóa bất cứ lúc nào.") to
+        ("SplitBill stores only what it needs to run: your name, email, avatar and the bank details " +
+          "you enter yourself. The app does not read SMS messages or private conversations. " +
+          "Your data is stored securely in the cloud and you can request deletion at any time."),
+      // Màn hình Cá nhân
+      "Cá nhân" to "Profile",
+      "Giúp bạn bè chuyển khoản hoàn trả dễ dàng hơn." to "Make it easy for friends to pay you back.",
+      "Đã lưu" to "Saved",
+      "Chưa lưu" to "Not saved",
+      "Chủ tài khoản" to "Account holder",
+      "Sao chép" to "Copy",
+      "Đã chép!" to "Copied!",
+      "Chỉnh sửa" to "Edit",
+      "Thành viên từ" to "Member since",
+      "Thiết lập ngay" to "Set up now",
+      "Chưa thiết lập ngân hàng" to "No bank account yet",
+      "Thêm tài khoản nhận để bạn bè chuyển khoản trả nợ." to
+        "Add a receiving account so friends can transfer money back.",
+      "Thanh toán bằng VietQR" to "Pay with VietQR",
+      "Bạn bè có thể quét mã QR để chuyển khoản hoàn trả cho bạn." to
+        "Friends can scan your QR code to transfer money back.",
+      "Tự động gắn mã QR khi đòi nợ" to "Attach QR automatically when settling up",
+      "Đang bật" to "On",
+      "Chưa bật" to "Off",
+      "Mỗi khi chia tiền trong nhóm, SplitBill sẽ tự động gắn thông tin VietQR ở trên để bạn bè thanh toán chỉ trong 1 chạm." to
+        "Whenever you split a bill, SplitBill attaches your VietQR details above so friends can pay in one tap.",
+      "Xem trước mã QR" to "Preview QR code",
+      "Cài đặt kèm số tiền" to "Set an amount",
+      "Cập nhật tài khoản nhận" to "Update receiving account",
+      "Sử dụng để tạo VietQR nhận hoàn tiền tức thì" to
+        "Used to create a VietQR for instant refunds",
+      "Ngân hàng thụ hưởng" to "Beneficiary bank",
+      "Nhập số tài khoản (giữ số 0 đầu)" to "Enter account number (keep leading zeros)",
+      "Hỗ trợ giữ nguyên số 0 ở đầu tài khoản" to "Leading zeros are kept as entered",
+      "Tên chủ tài khoản (In hoa không dấu)" to "Account holder (uppercase, no accents)",
+      "Hủy" to "Cancel",
+      "Lưu thông tin" to "Save details",
+      "Mã VietQR cá nhân" to "Your VietQR code",
+      "Sử dụng để bạn bè thanh toán chia tiền" to "Let friends pay you for shared bills",
+      "Số tiền cần thu (đ)" to "Amount to collect (VND)",
+      "Lưu mã QR về máy" to "Save QR to gallery",
+      "Chưa có thông báo mới" to "No new notifications",
+      "Thông báo về khoản chi mới, nhắc nợ và xác nhận thanh toán sẽ xuất hiện ở đây." to
+        "Notifications about new expenses, reminders and payment confirmations will appear here.",
+      "Thử lại" to "Try again"
     )
   }
 }

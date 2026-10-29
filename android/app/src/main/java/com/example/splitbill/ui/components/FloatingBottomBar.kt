@@ -34,7 +34,6 @@ import com.example.splitbill.ui.localization.localized
 enum class HomeTab {
   Home,
   Groups,
-  Debts,
   Profile,
   Settings
 }
@@ -47,6 +46,14 @@ fun FloatingBottomBar(
   modifier: Modifier = Modifier
 ) {
   val haptic = LocalHapticFeedback.current
+  // Lấy màu từ theme để thanh bar và nút (+) đổi theo sáng/tối
+  // (ở theme sáng các màu này trùng đúng #F9F9F6 và #011C27 như trước)
+  //
+  // Thanh bar phải đục hoàn toàn: nội dung của các tab được phép cuộn phía sau nó,
+  // nếu để alpha < 1 sẽ thấy chữ mờ xuyên qua thanh khi cuộn.
+  val barColor = MaterialTheme.colorScheme.surface
+  val fabColor = MaterialTheme.colorScheme.primary
+  val fabContentColor = MaterialTheme.colorScheme.onPrimary
 
   // Sử dụng Box bao quanh ngoài cùng với chiều cao đủ để chứa nút tròn nhô lên trên mà không bị cắt
   Box(
@@ -57,7 +64,7 @@ fun FloatingBottomBar(
   ) {
     // 1. Thanh nền Navigation Bar bên dưới
     Surface(
-      color = Color(0xFFF9F9F6).copy(alpha = 0.96f),
+      color = barColor,
       shadowElevation = 8.dp,
       modifier = Modifier
         .fillMaxWidth()
@@ -67,7 +74,7 @@ fun FloatingBottomBar(
         modifier = Modifier
           .fillMaxWidth()
           .windowInsetsPadding(WindowInsets.navigationBars)
-          .height(64.dp)
+          .height(Dimens.BottomBarHeight)
           .padding(horizontal = 12.dp)
       ) {
         Row(
@@ -100,18 +107,7 @@ fun FloatingBottomBar(
           // Chỗ trống chính giữa để nhường chỗ cho nút tròn nổi
           Spacer(modifier = Modifier.width(56.dp))
 
-          // Tab 4: Công nợ
-          BottomNavButton(
-            title = "Công nợ",
-            icon = Icons.Rounded.AccountBalanceWallet,
-            isSelected = selectedTab == HomeTab.Debts,
-            onClick = {
-              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-              onTabSelected(HomeTab.Debts)
-            }
-          )
-
-          // Tab 5: Cá nhân
+          // Tab 3: Cá nhân
           BottomNavButton(
             title = "Cá nhân",
             icon = Icons.Rounded.Person,
@@ -121,16 +117,32 @@ fun FloatingBottomBar(
               onTabSelected(HomeTab.Profile)
             }
           )
+
+          // Tab 4: Cài đặt
+          BottomNavButton(
+            title = "Cài đặt",
+            icon = Icons.Rounded.Settings,
+            isSelected = selectedTab == HomeTab.Settings,
+            onClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onTabSelected(HomeTab.Settings)
+            }
+          )
         }
       }
     }
 
     // 2. Nút (+) tròn nổi độc lập (đè lên phía trên thanh điều hướng, không bị cắt)
+    //
+    // Dùng padding chứ không phải offset: vùng chạm của nút phải nằm trong khung của
+    // thanh bar, nếu vẽ tràn ra ngoài thì Compose không nhận được cú chạm ở nửa trên.
+    // Nền phía sau phần nhô lên là nền của chính màn hình tab (Navigator không pad đáy
+    // cho nội dung nữa), nên không lộ dải màu lạ ở bất kỳ theme nào.
     Box(
       modifier = Modifier
         .align(Alignment.BottomCenter)
         .windowInsetsPadding(WindowInsets.navigationBars)
-        .padding(bottom = 32.dp) // Nhô cao 32dp đè lên thanh 64dp
+        .padding(bottom = Dimens.BottomBarOverhang)
     ) {
       Box(
         modifier = Modifier
@@ -141,7 +153,7 @@ fun FloatingBottomBar(
             spotColor = Color(0xFF011C27).copy(alpha = 0.45f)
           )
           .clip(CircleShape)
-          .background(Color(0xFF011C27))
+          .background(fabColor)
           .clickable {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onAddClick()
@@ -151,7 +163,7 @@ fun FloatingBottomBar(
         Icon(
           imageVector = Icons.Rounded.Add,
           contentDescription = "Thêm khoản chi mới",
-          tint = Color(0xFFFFFFFF),
+          tint = fabContentColor,
           modifier = Modifier.size(28.dp)
         )
       }
@@ -166,7 +178,11 @@ private fun BottomNavButton(
   isSelected: Boolean,
   onClick: () -> Unit
 ) {
-  val color = if (isSelected) Color(0xFF011C27) else Color(0xFF546068).copy(alpha = 0.75f)
+  val color = if (isSelected) {
+    MaterialTheme.colorScheme.primary
+  } else {
+    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+  }
 
   Column(
     modifier = Modifier

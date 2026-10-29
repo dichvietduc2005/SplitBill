@@ -11,7 +11,8 @@ data class ProfileEntity(
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("bank_code") val bankCode: String? = null,
     @SerialName("account_number") val accountNumber: String? = null,
-    @SerialName("account_name") val accountName: String? = null
+    @SerialName("account_name") val accountName: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable

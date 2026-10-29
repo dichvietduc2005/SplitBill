@@ -549,7 +549,7 @@ private fun QrToggleSection(
       )
       Spacer(Modifier.height(Dimens.SpacingS))
       Button(
-        onClick = { saveImageToGallery(context, qrImageUrl) },
+        onClick = { saveVietQrImageToGallery(context, qrImageUrl) },
         shape = MaterialTheme.shapes.medium
       ) {
         Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -560,7 +560,8 @@ private fun QrToggleSection(
   }
 }
 
-private fun saveImageToGallery(context: Context, imageUrl: String) {
+/** Tải ảnh QR từ URL và lưu vào thư viện ảnh của máy */
+fun saveVietQrImageToGallery(context: Context, imageUrl: String) {
   CoroutineScope(Dispatchers.IO).launch {
     try {
       val url = java.net.URL(imageUrl)

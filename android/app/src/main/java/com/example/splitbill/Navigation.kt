@@ -521,7 +521,9 @@ fun HomeTabsScreen(
   }
 
   Scaffold(
-    containerColor = Color(0xFFF9F9F6),
+    // Dùng màu surface của theme: khoảng hở phía trên FloatingBottomBar (phần nút + nhô lên)
+    // sẽ hoà với màu thanh bar thay vì lộ một dải màu nền sáng ở chế độ tối.
+    containerColor = MaterialTheme.colorScheme.surface,
     bottomBar = {
       FloatingBottomBar(
         selectedTab = currentTab,
@@ -530,14 +532,15 @@ fun HomeTabsScreen(
       )
     },
     modifier = Modifier.fillMaxSize()
-  ) { paddingValues ->
+  ) { _ ->
+    // Không pad đáy ở đây: mỗi màn hình tab tự chừa khoảng đệm đáy
+    // (Dimens.TabContentBottomPadding) nên nền của màn hình phủ luôn vùng sau thanh bar,
+    // tránh lộ dải màu nền khác ở phần nút (+) nhô lên.
     Crossfade(
       targetState = currentTab,
       animationSpec = androidx.compose.animation.core.tween(200),
       label = "tab_transition",
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(bottom = paddingValues.calculateBottomPadding())
+      modifier = Modifier.fillMaxSize()
     ) { tab ->
       when (tab) {
         HomeTab.Home -> {
@@ -555,22 +558,12 @@ fun HomeTabsScreen(
             onNavigateToGroup = onNavigateToGroup,
             onNavigateToProfile = onNavigateToProfile,
             onNavigateToGroupsTab = { currentTab = HomeTab.Groups },
-            onNavigateToDebtsTab = { currentTab = HomeTab.Debts },
+            onNavigateToDebtsTab = { currentTab = HomeTab.Groups },
             onCreateExpenseClick = { openAddExpense() },
             modifier = Modifier.fillMaxSize()
           )
         }
         HomeTab.Groups -> {
-          val groupViewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
-          GroupListScreen(
-            viewModel = groupViewModel,
-            onNavigateToGroup = onNavigateToGroup,
-            onNavigateToSettings = { currentTab = HomeTab.Settings },
-            modifier = Modifier.fillMaxSize()
-          )
-        }
-        HomeTab.Debts -> {
-          // Khi ở tab Công nợ, ta hiển thị danh sách nhóm để chọn xem tổng kết nợ hoặc xem nhóm đầu tiên
           val groupViewModel = viewModel { GroupListViewModel(groupRepository, inviteRepository, statsRepository) }
           GroupListScreen(
             viewModel = groupViewModel,

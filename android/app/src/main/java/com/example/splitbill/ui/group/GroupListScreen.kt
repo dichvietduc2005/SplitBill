@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.splitbill.data.api.GroupResponse
+import com.example.splitbill.theme.Dimens
 import com.example.splitbill.theme.Motion
 import com.example.splitbill.ui.components.EmptyState
 import com.example.splitbill.ui.components.GroupListSkeleton
@@ -257,11 +258,16 @@ fun GroupListScreen(
       }
     },
     snackbarHost = { SnackbarHost(snackbarHostState) },
+    // Scaffold bên ngoài (Navigation) đã chừa sẵn phần đáy cho FloatingBottomBar
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     modifier = modifier.fillMaxSize()
   ) { paddingValues ->
     Box(
       modifier = Modifier
         .padding(paddingValues)
+        // Thanh bar và nút (+) do Navigation vẽ đè lên, nên nội dung tự chừa
+        // inset thanh điều hướng + khoảng đệm đáy của thanh bar.
+        .navigationBarsPadding()
         .fillMaxSize()
     ) {
       when (val state = uiState) {
@@ -464,9 +470,9 @@ fun GroupListScreen(
                   }
                 }
 
-                // Khoảng đệm đáy màn hình để không bị che bởi FloatingBottomBar của trang chủ
+                // Khoảng đệm cuối danh sách: đủ để hàng cuối không bị thanh bar / nút (+) che
                 item(span = StaggeredGridItemSpan.FullLine) {
-                  Spacer(modifier = Modifier.height(110.dp))
+                  Spacer(modifier = Modifier.height(Dimens.TabContentBottomPadding))
                 }
               }
             }
