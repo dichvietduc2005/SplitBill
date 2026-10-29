@@ -28,6 +28,14 @@ object Dimens {
   val TopBarHeight = 64.dp
   val CardCornerRadius = 16.dp
   val BottomSheetCornerRadius = 24.dp
+
+  // Floating bottom bar
+  val BottomBarHeight = 64.dp
+  // Nút (+) nhô lên trên mép thanh bar chừng này
+  val BottomBarOverhang = 32.dp
+  // Khoảng đệm đáy của nội dung tab: thanh bar + phần nút (+) nhô lên, để hàng cuối
+  // không bị nút tròn che khi nội dung chạm đáy màn hình
+  val TabContentBottomPadding = BottomBarHeight + BottomBarOverhang
   
   // Icon Sizes
   val IconSizeS = 16.dp
