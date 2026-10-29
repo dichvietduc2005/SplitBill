@@ -81,17 +81,18 @@ fun HomeScreen(
 
   Scaffold(
     containerColor = Color(0xFFF9F9F6),
+    // Scaffold bên ngoài (Navigation) đã chừa sẵn phần đáy cho FloatingBottomBar nên ở đây
+    // không trừ lại inset thanh điều hướng, tránh khoảng trống thừa làm nội dung bị cắt lửng.
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
     modifier = modifier.fillMaxSize()
-  ) { paddingValues ->
+  ) { _ ->
     PullToRefreshBox(
       isRefreshing = isRefreshing,
       onRefresh = {
         isRefreshing = true
         viewModel.loadHomeData { isRefreshing = false }
       },
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(bottom = paddingValues.calculateBottomPadding())
+      modifier = Modifier.fillMaxSize()
     ) {
       when (val state = uiState) {
         is HomeUiState.Loading -> {
@@ -112,6 +113,9 @@ fun HomeScreen(
           Column(
             modifier = Modifier
               .fillMaxSize()
+              // Thanh bar và nút (+) do Navigation vẽ đè lên, nên nội dung tự chừa
+              // inset thanh điều hướng + khoảng đệm đáy của thanh bar.
+              .navigationBarsPadding()
               .verticalScroll(scrollState)
           ) {
             // 1. SCENIC HERO SECTION (Height ~ 320dp)
@@ -137,7 +141,8 @@ fun HomeScreen(
               onViewAllTransactions = onNavigateToDebtsTab
             )
 
-            Spacer(modifier = Modifier.height(100.dp))
+            // Khoảng đệm cuối trang: đủ để hàng cuối không bị thanh bar / nút (+) che
+            Spacer(modifier = Modifier.height(Dimens.TabContentBottomPadding))
           }
         }
       }
