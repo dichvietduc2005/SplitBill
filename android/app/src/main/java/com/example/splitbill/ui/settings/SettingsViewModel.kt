@@ -14,7 +14,11 @@ import kotlinx.coroutines.launch
 
 sealed interface SettingsProfileUiState {
   object Loading : SettingsProfileUiState
-  data class Success(val username: String, val email: String) : SettingsProfileUiState
+  data class Success(
+    val username: String,
+    val email: String,
+    val hasBankInfo: Boolean
+  ) : SettingsProfileUiState
   object Error : SettingsProfileUiState
 }
 
@@ -101,7 +105,11 @@ class SettingsViewModel(
       val result = profileRepository.getMyProfile()
       if (result.isSuccess) {
         val profile = result.getOrNull()!!
-        val newState = SettingsProfileUiState.Success(profile.username, profile.email)
+        val newState = SettingsProfileUiState.Success(
+          username = profile.username,
+          email = profile.email,
+          hasBankInfo = !profile.bankCode.isNullOrBlank() && !profile.accountNumber.isNullOrBlank()
+        )
         _profileUiState.value = newState
         cachedProfileState = newState
       } else if (_profileUiState.value is SettingsProfileUiState.Loading) {
