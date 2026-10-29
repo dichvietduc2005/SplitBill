@@ -145,7 +145,8 @@ data class ProfileResponse(
   val avatarUrl: String? = null,
   val bankCode: String? = null,
   val accountNumber: String? = null,
-  val accountName: String? = null
+  val accountName: String? = null,
+  val createdAt: String? = null
 )
 
 @Serializable

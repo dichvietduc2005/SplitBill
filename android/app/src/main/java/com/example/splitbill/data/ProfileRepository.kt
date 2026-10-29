@@ -37,7 +37,8 @@ class ProfileRepository(private val tokenManager: TokenManager) {
           avatarUrl = profile.avatarUrl,
           bankCode = profile.bankCode,
           accountNumber = profile.accountNumber,
-          accountName = profile.accountName
+          accountName = profile.accountName,
+          createdAt = profile.createdAt
         )
       )
     } catch (e: Exception) {
@@ -63,12 +64,25 @@ class ProfileRepository(private val tokenManager: TokenManager) {
           avatarUrl = profile.avatarUrl,
           bankCode = profile.bankCode,
           accountNumber = profile.accountNumber,
-          accountName = profile.accountName
+          accountName = profile.accountName,
+          createdAt = profile.createdAt
         )
       )
     } catch (e: Exception) {
       Result.failure(e)
     }
+  }
+
+  /**
+   * Khôi phục session từ token đã lưu rồi trả về id người dùng hiện tại.
+   * Các thao tác ghi (cập nhật ngân hàng, upload avatar) phải gọi hàm này trước khi dùng auth,
+   * vì sau khi app khởi động lại client chưa có session trong bộ nhớ.
+   */
+  private suspend fun requireUserId(): String? {
+    val cachedToken = tokenManager.getCachedToken()
+    val sessionValid = SupabaseConfig.ensureSession(cachedToken, tokenManager)
+    val userId = auth.currentUserOrNull()?.id ?: tokenManager.getUserId()
+    return if (sessionValid && userId != null && auth.currentSessionOrNull() != null) userId else null
   }
 
   /** Cập nhật thông tin ngân hàng của mình */
@@ -78,8 +92,8 @@ class ProfileRepository(private val tokenManager: TokenManager) {
     accountName: String
   ): Result<String> {
     return try {
-      val userId = auth.currentUserOrNull()?.id
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+      val userId = requireUserId()
+        ?: return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
 
       postgrest["profiles"].update({
         set("bank_code", bankCode)
@@ -96,8 +110,8 @@ class ProfileRepository(private val tokenManager: TokenManager) {
   /** Upload ảnh đại diện */
   suspend fun uploadAvatar(imageBytes: ByteArray): Result<String> {
     return try {
-      val userId = auth.currentUserOrNull()?.id
-        ?: return Result.failure(Exception("Chưa đăng nhập"))
+      val userId = requireUserId()
+        ?: return Result.failure(Exception("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn"))
 
       val fileName = "$userId/${UUID.randomUUID()}.jpg"
       val bucket = storage["avatars"]
