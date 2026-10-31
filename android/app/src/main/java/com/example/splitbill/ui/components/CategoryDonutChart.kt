@@ -75,7 +75,7 @@ fun CategoryDonutChart(
     Box(
       contentAlignment = Alignment.Center,
       modifier = Modifier
-        .size(220.dp)
+        .size(190.dp)
         .padding(8.dp)
     ) {
       Canvas(
@@ -179,9 +179,12 @@ fun CategoryDonutChart(
               )
             }
             Spacer(Modifier.height(4.dp))
-            AmountText(
-              amount = selectedCat.totalAmount,
-              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = category.iconColor)
+            // Số tiền rút gọn để không tràn ra khỏi vòng tròn khi nhóm chi tiêu lớn
+            Text(
+              text = formatCompactAmount(selectedCat.totalAmount),
+              style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+              color = category.iconColor,
+              maxLines = 1
             )
             Text(
               text = "${String.format(java.util.Locale.US, "%.1f", selectedCat.percentage)}%",
@@ -199,9 +202,12 @@ fun CategoryDonutChart(
               color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
             Spacer(Modifier.height(2.dp))
-            AmountText(
-              amount = totalAmount,
-              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            // Số tiền rút gọn (1,29 tỷ) thay cho dạng đầy đủ để vừa lòng vòng tròn
+            Text(
+              text = formatCompactAmount(totalAmount),
+              style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+              color = MaterialTheme.colorScheme.onSurface,
+              maxLines = 1
             )
             Spacer(Modifier.height(2.dp))
             Text(
@@ -225,7 +231,7 @@ fun CategoryDonutChart(
         val category = BillCategory.fromKey(catSpending.categoryKey)
         val isSelected = selectedIndex == index
 
-        Row(
+        Column(
           modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -237,56 +243,80 @@ fun CategoryDonutChart(
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
             )
             .clickable { selectedIndex = if (selectedIndex == index) -1 else index }
-            .padding(horizontal = Dimens.SpacingM, vertical = 10.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = Dimens.SpacingM, vertical = 10.dp)
         ) {
           Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.weight(1f)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(32.dp)
+                  .clip(CircleShape)
+                  .background(if (isSelected) category.iconColor.copy(alpha = 0.25f) else category.bgColor),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = category.icon,
+                  contentDescription = category.displayName,
+                  tint = category.iconColor,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+
+              Spacer(Modifier.width(Dimens.SpacingS))
+
+              Column {
+                Text(
+                  text = category.displayName,
+                  style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                  ),
+                  color = if (isSelected) category.iconColor else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                  text = "${String.format(java.util.Locale.US, "%.1f", catSpending.percentage)}%",
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                  ),
+                  color = if (isSelected) category.iconColor.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
+
+            Text(
+              text = formatCompactAmount(catSpending.totalAmount),
+              style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) category.iconColor else MaterialTheme.colorScheme.onSurface
+              ),
+              maxLines = 1
+            )
+          }
+
+          Spacer(Modifier.height(8.dp))
+
+          // Thanh tỷ trọng của danh mục, dùng đúng màu nhận diện của danh mục đó
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(4.dp)
+              .clip(CircleShape)
+              .background(trackColor)
           ) {
             Box(
               modifier = Modifier
-                .size(32.dp)
+                .fillMaxWidth((catSpending.percentage / 100f).coerceIn(0f, 1f))
+                .fillMaxHeight()
                 .clip(CircleShape)
-                .background(if (isSelected) category.iconColor.copy(alpha = 0.25f) else category.bgColor),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = category.icon,
-                contentDescription = category.displayName,
-                tint = category.iconColor,
-                modifier = Modifier.size(16.dp)
-              )
-            }
-
-            Spacer(Modifier.width(Dimens.SpacingS))
-
-            Column {
-              Text(
-                text = category.displayName,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
-                ),
-                color = if (isSelected) category.iconColor else MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = "${String.format(java.util.Locale.US, "%.1f", catSpending.percentage)}%",
-                style = MaterialTheme.typography.labelSmall.copy(
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                ),
-                color = if (isSelected) category.iconColor.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-          }
-
-          AmountText(
-            amount = catSpending.totalAmount,
-            style = MaterialTheme.typography.bodyMedium.copy(
-              fontWeight = FontWeight.Bold,
-              color = if (isSelected) category.iconColor else MaterialTheme.colorScheme.onSurface
+                .background(category.iconColor)
             )
-          )
+          }
         }
       }
     }

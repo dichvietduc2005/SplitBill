@@ -100,12 +100,12 @@ fun MonthlyBarChart(
           )
         }
         Spacer(Modifier.height(2.dp))
-        AmountText(
-          amount = selectedItem.amount,
-          style = MaterialTheme.typography.titleLarge.copy(
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-          )
+        // Số rút gọn để hàng tháng – số tiền không đẩy hai nút điều hướng ra ngoài
+        Text(
+          text = "${formatCompactAmount(selectedItem.amount)} ₫",
+          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+          color = MaterialTheme.colorScheme.primary,
+          maxLines = 1
         )
       }
 
@@ -136,13 +136,8 @@ fun MonthlyBarChart(
         val isSelected = index == selectedIndex
         val heightRatio = ((item.amount / maxAmount).toFloat() * animProgress).coerceIn(0.05f, 1f)
 
-        val shortAmount = remember(item.amount) {
-          when {
-            item.amount >= 1_000_000 -> "${(item.amount / 1_000_000).let { if (it % 1 == 0.0) it.toInt() else String.format("%.1f", it) }}M"
-            item.amount >= 1_000 -> "${(item.amount / 1000).toInt()}k"
-            else -> "${item.amount.toInt()}"
-          }
-        }
+        // Nhãn cột dùng số rút gọn, tránh "1292,5M" tràn khỏi cột khi chi tiêu lên tới hàng tỷ
+        val shortAmount = formatCompactAmount(item.amount)
 
         val shortMonth = remember(item.month) {
           val parts = item.month.split("-", "/")
