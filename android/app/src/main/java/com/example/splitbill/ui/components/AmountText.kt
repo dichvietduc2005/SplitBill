@@ -13,6 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import com.example.splitbill.theme.LocalSplitBillCustomColors
+import com.example.splitbill.ui.localization.AppLanguage
+import com.example.splitbill.ui.localization.LocalAppLanguage
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -61,4 +65,26 @@ fun AmountText(
     color = finalColor,
     modifier = modifier
   )
+}
+
+/** Số tiền đầy đủ theo tiền đồng, ví dụ "1.292.477.696 ₫" */
+fun formatVndFull(amount: Double): String =
+  NumberFormat.getCurrencyInstance(Locale("vi", "VN")).format(amount)
+
+/**
+ * Số tiền rút gọn cho những chỗ hẹp (giữa biểu đồ tròn, nhãn cột, thẻ đôi):
+ * 250.000 · 1,2 tr · 1,29 tỷ
+ */
+@Composable
+fun formatCompactAmount(amount: Double): String {
+  val english = LocalAppLanguage.current == AppLanguage.ENGLISH
+  val value = kotlin.math.abs(amount)
+  val sign = if (amount < 0) "-" else ""
+  val locale = if (english) Locale.US else Locale.GERMANY
+  val formatter = DecimalFormat("#,##0.##", DecimalFormatSymbols(locale))
+  return when {
+    value >= 1_000_000_000 -> sign + formatter.format(value / 1_000_000_000) + if (english) "B" else " tỷ"
+    value >= 1_000_000 -> sign + formatter.format(value / 1_000_000) + if (english) "M" else " tr"
+    else -> sign + NumberFormat.getIntegerInstance(locale).format(value.toLong())
+  }
 }
