@@ -200,6 +200,31 @@ class Translator(private val language: AppLanguage) {
       "Chưa có thông báo mới" to "No new notifications",
       "Thông báo về khoản chi mới, nhắc nợ và xác nhận thanh toán sẽ xuất hiện ở đây." to
         "Notifications about new expenses, reminders and payment confirmations will appear here.",
+      // Màn hình Thống kê nhóm
+      "Thống kê nhóm" to "Group stats",
+      "Quay lại" to "Back",
+      "Xuất báo cáo" to "Export report",
+      "Tháng này" to "This month",
+      "3 tháng gần đây" to "Last 3 months",
+      "Tất cả thời gian" to "All time",
+      "Tổng chi tiêu nhóm" to "Group spending",
+      "Tăng %s%% so với kỳ trước" to "Up %s%% vs the previous period",
+      "Tăng gấp %s lần so với kỳ trước" to "Up %sx vs the previous period",
+      "Giảm %s%% so với kỳ trước" to "Down %s%% vs the previous period",
+      "Không đổi so với kỳ trước" to "Unchanged vs the previous period",
+      "Chưa đủ dữ liệu để so sánh" to "Not enough data to compare yet",
+      "Bạn đã chi trả" to "You paid",
+      "Phần của bạn" to "Your share",
+      "Xu hướng chi tiêu" to "Spending trend",
+      "6 tháng gần nhất" to "Last 6 months",
+      "Chi tiêu theo danh mục" to "Spending by category",
+      "Chưa có khoản chi nào trong kỳ này" to "No expenses in this period yet",
+      "Tỷ lệ đóng góp chi tiêu" to "Contribution share",
+      "Khoản chi gần đây" to "Recent expenses",
+      "Phần bạn chi trả trong nhóm" to "What you paid inside the group",
+      "Bạn đã trả" to "You paid",
+      "Xuất báo cáo chi tiêu" to "Export expense report",
+      "Không thể tải thống kê" to "Could not load the stats",
       "Thử lại" to "Try again"
     )
   }
